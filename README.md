@@ -3,7 +3,6 @@
 <div align="center">
   <img src="./images/MAGI2.png" alt="MAGI Logo" width="200"/>
   <h3>Multi-Node Monitoring & Management Interface</h3>
-  <p><em>Like the MAGI system from Evangelion, but for your home lab</em></p>
 </div>
 
 ## Overview
