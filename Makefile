@@ -35,6 +35,31 @@ setup:
 	@echo -e "$(BLUE)Setting up MAGI...$(NC)"
 	@./scripts/setup.sh
 
+## Check system requirements and dependencies
+check:
+	@echo -e "$(BLUE)Checking requirements and dependencies...$(NC)"
+	@./scripts/deps-manager.sh check
+
+## Manage dependencies interactively
+deps:
+	@echo -e "$(BLUE)Opening dependencies manager...$(NC)"
+	@./scripts/deps-manager.sh
+
+## Install missing dependencies only
+deps-install:
+	@echo -e "$(BLUE)Installing missing dependencies...$(NC)"
+	@./scripts/deps-manager.sh install
+
+## Update all dependencies
+deps-update:
+	@echo -e "$(BLUE)Updating dependencies...$(NC)"
+	@./scripts/deps-manager.sh update
+
+## Clean and reinstall all dependencies
+deps-clean:
+	@echo -e "$(BLUE)Cleaning and reinstalling dependencies...$(NC)"
+	@./scripts/deps-manager.sh clean
+
 ## Build all applications
 build:
 	@echo -e "$(BLUE)Building applications...$(NC)"
