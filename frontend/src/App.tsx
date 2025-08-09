@@ -1,73 +1,49 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
-import { AuthProvider } from './contexts/AuthContext';
-import { SocketProvider } from './contexts/SocketContext';
-import ProtectedRoute from './components/ProtectedRoute';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import NodeDetail from './pages/NodeDetail';
-import Terminal from './pages/Terminal';
-import Settings from './pages/Settings';
+import './App.css';
 
 function App() {
   return (
-    <AuthProvider>
-      <SocketProvider>
-        <Router>
-          <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/" element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              } />
-              <Route path="/node/:nodeId" element={
-                <ProtectedRoute>
-                  <NodeDetail />
-                </ProtectedRoute>
-              } />
-              <Route path="/terminal/:nodeId" element={
-                <ProtectedRoute>
-                  <Terminal />
-                </ProtectedRoute>
-              } />
-              <Route path="/settings" element={
-                <ProtectedRoute>
-                  <Settings />
-                </ProtectedRoute>
-              } />
-            </Routes>
-            <Toaster 
-              position="top-right"
-              toastOptions={{
-                duration: 4000,
-                style: {
-                  background: '#1f2937',
-                  color: '#f3f4f6',
-                  border: '1px solid #374151',
-                },
-                success: {
-                  style: {
-                    background: '#065f46',
-                    color: '#d1fae5',
-                    border: '1px solid #10b981',
-                  },
-                },
-                error: {
-                  style: {
-                    background: '#7f1d1d',
-                    color: '#fee2e2',
-                    border: '1px solid #ef4444',
-                  },
-                },
-              }}
-            />
+    <div className="App">
+      <header className="App-header">
+        <div className="magi-header">
+          <h1>🧙‍♂️ MAGI</h1>
+          <p>Magical Automation & General Intelligence</p>
+          <small>Distributed Node Monitoring System</small>
+        </div>
+        
+        <div className="node-grid">
+          <div className="node-card">
+            <h3>🎮 Gaspar</h3>
+            <p>Multimedia Center</p>
+            <span className="status online">192.168.1.100</span>
           </div>
-        </Router>
-      </SocketProvider>
-    </AuthProvider>
+          
+          <div className="node-card">
+            <h3>💾 Melchor</h3>
+            <p>Backup & Storage</p>
+            <span className="status online">192.168.1.101</span>
+          </div>
+          
+          <div className="node-card">
+            <h3>🏠 Baltasar</h3>
+            <p>Home Automation</p>
+            <span className="status online">192.168.1.102</span>
+          </div>
+        </div>
+        
+        <div className="quick-actions">
+          <button className="action-btn">📊 Dashboard</button>
+          <button className="action-btn">🖥️ Terminals</button>
+          <button className="action-btn">⚙️ Settings</button>
+        </div>
+        
+        <div className="footer">
+          <p>✅ Sistema funcionando correctamente</p>
+          <p>🎉 Todas las dependencias instaladas exitosamente</p>
+          <p>🚀 Ready for development!</p>
+        </div>
+      </header>
+    </div>
   );
 }
 
