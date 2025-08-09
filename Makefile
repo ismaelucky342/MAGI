@@ -94,6 +94,15 @@ dev:
 	@echo -e "$(BLUE)Starting development environment...$(NC)"
 	@echo -e "$(YELLOW)Frontend: http://localhost:3000$(NC)"
 	@echo -e "$(YELLOW)Backend API: http://localhost:5000$(NC)"
+	@echo -e "$(BLUE)Installing dependencies in root...$(NC)"
+	@npm install
+	@echo -e "$(BLUE)Installing dependencies in backend...$(NC)"
+	@cd backend && npm install
+	@echo -e "$(BLUE)Installing dependencies in frontend...$(NC)"
+	@cd frontend && npm install --legacy-peer-deps
+	@echo -e "$(BLUE)Installing webpack dependencies in frontend...$(NC)"
+	@cd frontend && npm install webpack webpack-cli --save-dev --legacy-peer-deps
+	@echo -e "$(BLUE)Starting development servers...$(NC)"
 	@npm run dev
 
 ## Start with Docker Compose

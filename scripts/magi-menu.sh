@@ -24,14 +24,10 @@ press_enter() {
 print_header() {
     clear
     echo -e "${PURPLE}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${PURPLE}║                            🧙‍♂️ MAGI Control Center                          ║${NC}"
-    echo -e "${PURPLE}║                     ${CYAN}Magical Automation & General Intelligence${NC}             ${PURPLE}║${NC}"
+    echo -e "${PURPLE}║                             MAGI Control Center                           ║${NC}"
+    echo -e "${PURPLE}║                     ${CYAN}Distributed Node Monitoring System${NC}                    ${PURPLE}║${NC}"
     echo -e "${PURPLE}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${BLUE}${BOLD}Nodos de Monitorización:${NC}"
-    echo -e "${GREEN}  🎮 Gaspar   (192.168.1.100) - Centro Multimedia${NC}"
-    echo -e "${GREEN}  💾 Melchor  (192.168.1.101) - Backup & Storage${NC}"
-    echo -e "${GREEN}  🏠 Baltasar (192.168.1.102) - Domótica${NC}"
     echo ""
 }
 
