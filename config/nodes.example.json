@@ -1,0 +1,53 @@
+{
+  "nodes": [
+    {
+      "id": "gaspar",
+      "name": "Gaspar",
+      "role": "Multimedia Server",
+      "description": "Streaming, downloads, and media storage",
+      "ip": "192.168.1.100",
+      "hostname": "gaspar.local",
+      "services": [
+        {
+          "name": "jellyfin",
+          "display_name": "Jellyfin",
+          "port": 8096,
+          "health_endpoint": "/health",
+          "critical": true
+        }
+      ],
+      "metrics": {
+        "port": 9100,
+        "endpoint": "/metrics"
+      },
+      "ssh": {
+        "port": 22,
+        "username": "your-username",
+        "key_path": "~/.ssh/id_rsa"
+      },
+      "terminal": {
+        "enabled": true,
+        "port": 7681
+      }
+    }
+  ],
+  "global_settings": {
+    "refresh_interval": 5000,
+    "alert_thresholds": {
+      "cpu_usage": 85,
+      "memory_usage": 90,
+      "disk_usage": 95,
+      "response_timeout": 10000
+    },
+    "authentication": {
+      "enabled": true,
+      "session_timeout": 3600000,
+      "max_login_attempts": 5
+    },
+    "notifications": {
+      "sound_enabled": true,
+      "desktop_notifications": true,
+      "email_alerts": false
+    }
+  }
+}

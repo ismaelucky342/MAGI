@@ -1,0 +1,162 @@
+{
+  "nodes": [
+    {
+      "id": "gaspar",
+      "name": "Gaspar",
+      "role": "Multimedia Server",
+      "description": "Streaming, downloads, and media storage",
+      "ip": "192.168.1.100",
+      "hostname": "gaspar.local",
+      "services": [
+        {
+          "name": "jellyfin",
+          "display_name": "Jellyfin",
+          "port": 8096,
+          "health_endpoint": "/health",
+          "critical": true
+        },
+        {
+          "name": "transmission",
+          "display_name": "Transmission",
+          "port": 9091,
+          "health_endpoint": "/transmission/web/",
+          "critical": false
+        },
+        {
+          "name": "plex",
+          "display_name": "Plex Media Server",
+          "port": 32400,
+          "health_endpoint": "/web",
+          "critical": false
+        }
+      ],
+      "metrics": {
+        "port": 9100,
+        "endpoint": "/metrics"
+      },
+      "ssh": {
+        "port": 22,
+        "username": "admin",
+        "key_path": "~/.ssh/gaspar_key"
+      },
+      "terminal": {
+        "enabled": true,
+        "port": 7681
+      }
+    },
+    {
+      "id": "melchor",
+      "name": "Melchor", 
+      "role": "Backup & Storage",
+      "description": "Backup services and mass storage",
+      "ip": "192.168.1.101",
+      "hostname": "melchor.local",
+      "services": [
+        {
+          "name": "nextcloud",
+          "display_name": "Nextcloud",
+          "port": 8080,
+          "health_endpoint": "/status.php",
+          "critical": true
+        },
+        {
+          "name": "rsync",
+          "display_name": "Rsync Daemon",
+          "port": 873,
+          "health_endpoint": null,
+          "critical": true
+        },
+        {
+          "name": "duplicity",
+          "display_name": "Duplicity Backup",
+          "port": null,
+          "health_endpoint": null,
+          "critical": false
+        }
+      ],
+      "metrics": {
+        "port": 9100,
+        "endpoint": "/metrics"
+      },
+      "ssh": {
+        "port": 22,
+        "username": "admin",
+        "key_path": "~/.ssh/melchor_key"
+      },
+      "terminal": {
+        "enabled": true,
+        "port": 7682
+      }
+    },
+    {
+      "id": "baltasar",
+      "name": "Baltasar",
+      "role": "Home Automation",
+      "description": "IoT, automation, and smart home services",
+      "ip": "192.168.1.102", 
+      "hostname": "baltasar.local",
+      "services": [
+        {
+          "name": "homeassistant",
+          "display_name": "Home Assistant",
+          "port": 8123,
+          "health_endpoint": "/api/",
+          "critical": true
+        },
+        {
+          "name": "nodered",
+          "display_name": "Node-RED",
+          "port": 1880,
+          "health_endpoint": "/",
+          "critical": false
+        },
+        {
+          "name": "zigbee2mqtt",
+          "display_name": "Zigbee2MQTT",
+          "port": 8080,
+          "health_endpoint": "/api/info",
+          "critical": false
+        },
+        {
+          "name": "mosquitto",
+          "display_name": "MQTT Broker",
+          "port": 1883,
+          "health_endpoint": null,
+          "critical": true
+        }
+      ],
+      "metrics": {
+        "port": 9100,
+        "endpoint": "/metrics"
+      },
+      "ssh": {
+        "port": 22,
+        "username": "admin",
+        "key_path": "~/.ssh/baltasar_key"
+      },
+      "terminal": {
+        "enabled": true,
+        "port": 7683
+      }
+    }
+  ],
+  "global_settings": {
+    "refresh_interval": 5000,
+    "alert_thresholds": {
+      "cpu_usage": 85,
+      "memory_usage": 90,
+      "disk_usage": 95,
+      "response_timeout": 10000
+    },
+    "authentication": {
+      "enabled": true,
+      "session_timeout": 3600000,
+      "max_login_attempts": 5
+    },
+    "notifications": {
+      "sound_enabled": true,
+      "desktop_notifications": true,
+      "email_alerts": false
+    }
+  }
+}
