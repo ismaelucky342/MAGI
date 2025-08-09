@@ -1,7 +1,7 @@
 # MAGI Monitoring System - Makefile
 # Centralizes installation, deployment, and management
 
-.PHONY: help install setup build dev start stop clean deploy test frontend backend docker status logs
+.PHONY: help install setup build dev start stop clean deploy test frontend backend docker status logs menu first-time
 
 # Colors for output
 BLUE := \033[1;34m
@@ -11,23 +11,46 @@ RED := \033[1;31m
 NC := \033[0m
 
 # Default target
-.DEFAULT_GOAL := help
+.DEFAULT_GOAL := menu
 
 ## Display this help message
 help:
 	@echo -e "$(BLUE)MAGI Monitoring System$(NC)"
 	@echo -e "$(BLUE)========================$(NC)"
 	@echo ""
+	@echo -e "$(YELLOW)📋 FLUJO RECOMENDADO PARA NUEVOS USUARIOS:$(NC)"
+	@echo -e "$(GREEN)  make menu          # Menú interactivo (RECOMENDADO)$(NC)"
+	@echo -e "$(GREEN)  make first-time    # Configuración completa automática$(NC)"
+	@echo ""
 	@echo -e "$(GREEN)Available targets:$(NC)"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo -e "$(GREEN)Quick Start:$(NC)"
-	@echo -e "  make install     # First time setup"
+	@echo -e "  make menu        # Interactive management menu"
+	@echo -e "  make first-time  # Complete setup (deps check + install + setup)"
+	@echo -e "  make install     # Install dependencies only"
 	@echo -e "  make dev         # Start development environment"
 	@echo -e "  make deploy      # Deploy to production nodes"
 
 ## Install dependencies and setup environment
 install: setup
+
+## Interactive management menu (RECOMMENDED)
+menu:
+	@echo -e "$(GREEN)🧙‍♂️ Launching MAGI Interactive Menu...$(NC)"
+	@./scripts/magi-menu.sh
+
+## Complete first-time setup with dependency verification
+first-time:
+	@echo -e "$(YELLOW)🚀 Starting complete MAGI first-time setup...$(NC)"
+	@echo -e "$(BLUE)Step 1: Checking dependencies and requirements...$(NC)"
+	@./scripts/deps-manager.sh check || true
+	@echo ""
+	@echo -e "$(BLUE)Step 2: Running initial setup...$(NC)"
+	@./scripts/setup.sh
+	@echo ""
+	@echo -e "$(GREEN)✅ First-time setup complete!$(NC)"
+	@echo -e "$(YELLOW)Next: Run 'make dev' to start development or 'make menu' for more options$(NC)"
 	@echo -e "$(GREEN)✓ Installation completed!$(NC)"
 
 ## Setup project (dependencies, config, directories)
@@ -151,7 +174,3 @@ info:
 	@echo -e "  Gaspar   (192.168.1.100) - Multimedia Server"
 	@echo -e "  Melchor  (192.168.1.101) - Backup & Storage"
 	@echo -e "  Baltasar (192.168.1.102) - Home Automation"
-
-## Interactive menu
-menu:
-	@./scripts/magi-menu.sh
