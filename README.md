@@ -209,34 +209,5 @@ MAGI/
 └── docs/                 # Documentation
 ```
 
-### Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
 
-## Security
-
-- All SSH connections use key-based authentication
-- Web interface requires JWT token authentication
-- HTTPS enabled in production
-- Rate limiting on API endpoints
-- Input validation and sanitization
-
-## Monitoring Endpoints
-
-- **Health Check**: `GET /api/health`
-- **Node Status**: `GET /api/nodes/:nodeId/status`
-- **Metrics**: `GET /api/nodes/:nodeId/metrics`
-- **Services**: `GET /api/nodes/:nodeId/services`
-
-## License
-
-MIT License - see [LICENSE](LICENSE) file for details
-
-## Acknowledgments
-
-- Inspired by the MAGI system from Neon Genesis Evangelion
-- Built for home lab enthusiasts and self-hosted infrastructure
