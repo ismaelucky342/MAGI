@@ -1,92 +1,78 @@
-import fs from 'fs';
-import path from 'path';
+import { createWriteStream, existsSync, mkdirSync } from 'fs';
+import { join } from 'path';
 
-// Simple logger implementation
-interface LogLevel {
-  ERROR: number;
-  WARN: number;
-  INFO: number;
-  DEBUG: number;
+enum LogLevel {
+  ERROR = 0,
+  WARN = 1,
+  INFO = 2,
+  DEBUG = 3,
 }
 
-const LOG_LEVELS: LogLevel = {
-  ERROR: 0,
-  WARN: 1,
-  INFO: 2,
-  DEBUG: 3
-};
-
 class Logger {
-  private logLevel: number;
-  private logFile?: string;
+  private logLevel: LogLevel;
+  private logStream: any;
 
   constructor() {
-    const level = process.env.LOG_LEVEL?.toLowerCase() || 'info';
-    this.logLevel = this.getLogLevel(level);
-    this.logFile = process.env.LOG_FILE;
+    this.logLevel = this.parseLogLevel(process.env.LOG_LEVEL || 'info');
     
-    // Ensure log directory exists
-    if (this.logFile) {
-      const logDir = path.dirname(this.logFile);
-      if (!fs.existsSync(logDir)) {
-        fs.mkdirSync(logDir, { recursive: true });
-      }
+    // Crear directorio de logs si no existe
+    const logDir = join(process.cwd(), 'logs');
+    if (!existsSync(logDir)) {
+      mkdirSync(logDir, { recursive: true });
+    }
+
+    // Crear stream de log
+    const logFile = join(logDir, `magi-${new Date().toISOString().split('T')[0]}.log`);
+    this.logStream = createWriteStream(logFile, { flags: 'a' });
+  }
+
+  private parseLogLevel(level: string): LogLevel {
+    switch (level.toLowerCase()) {
+      case 'error':
+        return LogLevel.ERROR;
+      case 'warn':
+        return LogLevel.WARN;
+      case 'info':
+        return LogLevel.INFO;
+      case 'debug':
+        return LogLevel.DEBUG;
+      default:
+        return LogLevel.INFO;
     }
   }
 
-  private getLogLevel(level: string): number {
-    switch (level) {
-      case 'error': return LOG_LEVELS.ERROR;
-      case 'warn': return LOG_LEVELS.WARN;
-      case 'info': return LOG_LEVELS.INFO;
-      case 'debug': return LOG_LEVELS.DEBUG;
-      default: return LOG_LEVELS.INFO;
-    }
-  }
-
-  private formatMessage(level: string, message: string, ...args: any[]): string {
+  private formatMessage(level: string, message: string, meta?: any): string {
     const timestamp = new Date().toISOString();
-    const formattedArgs = args.length > 0 ? ' ' + args.map(arg => 
-      typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-    ).join(' ') : '';
-    
-    return `[${timestamp}] [${level.toUpperCase()}] ${message}${formattedArgs}`;
+    const metaString = meta ? ` ${JSON.stringify(meta)}` : '';
+    return `[${timestamp}] ${level.toUpperCase()}: ${message}${metaString}`;
   }
 
-  private writeLog(level: string, message: string, ...args: any[]): void {
-    const formattedMessage = this.formatMessage(level, message, ...args);
-    
-    // Console output
-    console.log(formattedMessage);
-    
-    // File output
-    if (this.logFile) {
-      fs.appendFileSync(this.logFile, formattedMessage + '\n');
+  private log(level: LogLevel, levelName: string, message: string, meta?: any) {
+    if (level <= this.logLevel) {
+      const formattedMessage = this.formatMessage(levelName, message, meta);
+      
+      // Log a consola
+      console.log(formattedMessage);
+      
+      // Log a archivo
+      this.logStream.write(formattedMessage + '\n');
     }
   }
 
-  public error(message: string, ...args: any[]): void {
-    if (this.logLevel >= LOG_LEVELS.ERROR) {
-      this.writeLog('error', message, ...args);
-    }
+  error(message: string, meta?: any) {
+    this.log(LogLevel.ERROR, 'error', message, meta);
   }
 
-  public warn(message: string, ...args: any[]): void {
-    if (this.logLevel >= LOG_LEVELS.WARN) {
-      this.writeLog('warn', message, ...args);
-    }
+  warn(message: string, meta?: any) {
+    this.log(LogLevel.WARN, 'warn', message, meta);
   }
 
-  public info(message: string, ...args: any[]): void {
-    if (this.logLevel >= LOG_LEVELS.INFO) {
-      this.writeLog('info', message, ...args);
-    }
+  info(message: string, meta?: any) {
+    this.log(LogLevel.INFO, 'info', message, meta);
   }
 
-  public debug(message: string, ...args: any[]): void {
-    if (this.logLevel >= LOG_LEVELS.DEBUG) {
-      this.writeLog('debug', message, ...args);
-    }
+  debug(message: string, meta?: any) {
+    this.log(LogLevel.DEBUG, 'debug', message, meta);
   }
 }
 

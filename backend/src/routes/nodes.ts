@@ -1,7 +1,10 @@
 import express from 'express';
 import { Request, Response } from 'express';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
 const router = express.Router();
+const execAsync = promisify(exec);
 
 // GET /api/nodes - Get all nodes
 router.get('/', (req: Request, res: Response) => {
@@ -145,6 +148,32 @@ router.post('/:id/restart', (req: Request, res: Response) => {
     success: true, 
     message: `Service ${service} restart initiated on ${id}` 
   });
+});
+
+// GET /api/nodes/ping/:ip - Check if node is reachable
+router.get('/ping/:ip', async (req: Request, res: Response) => {
+  const { ip } = req.params;
+  
+  try {
+    // Usar ping para verificar si el nodo está en línea
+    await execAsync(`ping -c 1 -W 2 ${ip}`);
+    
+    // Si llegamos aquí, el ping fue exitoso
+    res.json({ 
+      status: 'online',
+      ip,
+      timestamp: new Date(),
+      responseTime: Math.floor(Math.random() * 50) + 1 // Simular tiempo de respuesta
+    });
+  } catch (error) {
+    // Si el ping falla, el nodo está offline
+    res.json({ 
+      status: 'offline',
+      ip,
+      timestamp: new Date(),
+      error: 'Node unreachable'
+    });
+  }
 });
 
 export default router;

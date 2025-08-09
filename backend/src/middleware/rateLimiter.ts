@@ -1,9 +1,15 @@
 import rateLimit from 'express-rate-limit';
 
 export const rateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.',
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 100, // límite de 100 requests por ventana por IP
+  message: 'Demasiadas peticiones desde esta IP, intenta de nuevo más tarde.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const strictRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: 'Límite de peticiones excedido para esta operación.',
 });

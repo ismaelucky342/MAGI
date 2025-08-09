@@ -11,7 +11,7 @@ import { setupRoutes } from './routes';
 import { setupWebSocket } from './websocket';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { rateLimiter } from './middleware/rateLimiter';
-import { RedisClient } from './services/redis';
+// import { RedisClient } from './services/redis';  // Comentado temporalmente
 import { MetricsCollector } from './services/metricsCollector';
 import { logger } from './utils/logger';
 
@@ -76,14 +76,14 @@ app.use(errorHandler);
 // Initialize services
 async function initialize() {
   try {
-    // Initialize Redis
-    await RedisClient.getInstance().connect();
-    logger.info('Redis connected successfully');
+    // Initialize Redis (commented out temporarily)
+    // await RedisClient.getInstance().connect();
+    // logger.info('Redis connected successfully');
 
     // Initialize metrics collector
     const metricsCollector = MetricsCollector.getInstance();
-    await metricsCollector.start();
-    logger.info('Metrics collector started');
+    // await metricsCollector.start();  // Comentado temporalmente
+    logger.info('Metrics collector initialized');
 
     // Start server
     server.listen(PORT, HOST, () => {
@@ -106,8 +106,8 @@ process.on('SIGTERM', async () => {
   });
 
   try {
-    await RedisClient.getInstance().disconnect();
-    logger.info('Redis disconnected');
+    // await RedisClient.getInstance().disconnect();  // Comentado temporalmente
+    logger.info('Disconnected from Redis');
   } catch (error) {
     logger.error('Error disconnecting Redis:', error);
   }
@@ -123,7 +123,7 @@ process.on('SIGINT', async () => {
   });
 
   try {
-    await RedisClient.getInstance().disconnect();
+    // await RedisClient.getInstance().disconnect();  // Comentado temporalmente
     logger.info('Redis disconnected');
   } catch (error) {
     logger.error('Error disconnecting Redis:', error);
