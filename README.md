@@ -1,7 +1,7 @@
 # MAGI - Distributed Node Monitoring System
 
 <div align="center">
-  <img src="./images/MAGI2.png" alt="MAGI Logo" width="200"/>
+  <img src="./images/MAGI.png" alt="MAGI Logo" width="200"/>
   <h3>Multi-Node Monitoring & Management Interface</h3>
 </div>
 
