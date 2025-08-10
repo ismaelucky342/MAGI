@@ -35,6 +35,8 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
             self.serve_main_page()
         elif self.path == "/api/metrics":
             self.serve_metrics()
+        elif self.path == "/api/all-metrics":
+            self.serve_all_metrics()
         elif self.path == "/api/nodes":
             self.serve_nodes()
         elif self.path == "/api/services":
@@ -94,6 +96,42 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
         """Serve system metrics as JSON"""
         metrics = get_system_metrics()
         self.send_json(metrics)
+        
+    def serve_all_metrics(self):
+        """Serve metrics from all nodes"""
+        try:
+            all_metrics = {}
+            
+            # Get metrics from all configured nodes
+            for node in CONFIG["other_nodes"]:
+                node_name = node["name"]
+                node_ip = node["ip"]
+                node_port = node["port"]
+                
+                try:
+                    url = f"http://{node_ip}:{node_port}/api/metrics"
+                    request = urllib.request.Request(url)
+                    request.add_header('User-Agent', 'MAGI-Node/2.0')
+                    
+                    with urllib.request.urlopen(request, timeout=3) as response:
+                        node_metrics = json.loads(response.read().decode())
+                        all_metrics[node_name] = {
+                            "status": "online",
+                            "metrics": node_metrics,
+                            "ip": node_ip,
+                            "port": node_port
+                        }
+                except Exception as e:
+                    all_metrics[node_name] = {
+                        "status": "offline",
+                        "error": str(e),
+                        "ip": node_ip,
+                        "port": node_port
+                    }
+            
+            self.send_json(all_metrics)
+        except Exception as e:
+            self.send_error(500, f"Error getting all metrics: {e}")
     
     def serve_nodes(self):
         """Serve nodes discovery data"""
@@ -275,79 +313,10 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
 
             <!-- System Metrics Panel -->
             <section class="panel metrics-panel">
-                <h3>📊 System Metrics</h3>
-                <div class="metrics-grid">
-                    <div class="metric-card">
-                        <div class="metric-label">CPU</div>
-                        <div class="metric-value" id="cpu">--</div>
-                        <div class="metric-bar">
-                            <div class="metric-fill" id="cpu-bar"></div>
-                        </div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">RAM</div>
-                        <div class="metric-value" id="ram">--</div>
-                        <div class="metric-bar">
-                            <div class="metric-fill" id="ram-bar"></div>
-                        </div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">DISK</div>
-                        <div class="metric-value" id="disk">--</div>
-                        <div class="metric-bar">
-                            <div class="metric-fill" id="disk-bar"></div>
-                        </div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">NETWORK</div>
-                        <div class="metric-value" id="network">--</div>
-                        <div class="metric-details" id="network-details">--</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">TEMP</div>
-                        <div class="metric-value" id="temperature">--</div>
-                        <div class="metric-details" id="temp-details">--</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">POWER</div>
-                        <div class="metric-value power-state" id="power-state">--</div>
-                        <div class="metric-details" id="power-details">--</div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Power Control Panel -->
-            <section class="panel power-control-panel">
-                <h3>⚡ Power Control</h3>
-                <div class="power-controls">
-                    <div class="power-mode-controls">
-                        <h4>Performance Mode</h4>
-                        <div class="button-group">
-                            <button class="power-btn performance" onclick="changePowerMode('performance')">
-                                🚀 Performance
-                            </button>
-                            <button class="power-btn balanced" onclick="changePowerMode('balanced')">
-                                ⚖️ Balanced
-                            </button>
-                            <button class="power-btn powersave" onclick="changePowerMode('powersave')">
-                                🔋 Power Save
-                            </button>
-                        </div>
-                    </div>
-                    <div class="system-controls">
-                        <h4>System Control</h4>
-                        <div class="button-group">
-                            <button class="system-btn sleep" onclick="confirmSystemAction('sleep')">
-                                💤 Sleep
-                            </button>
-                            <button class="system-btn reboot" onclick="confirmSystemAction('reboot')">
-                                🔄 Reboot
-                            </button>
-                            <button class="system-btn shutdown" onclick="confirmSystemAction('shutdown')">
-                                ⏻ Shutdown
-                            </button>
-                        </div>
-                    </div>
+                <h3>📊 Multi-Node System Metrics</h3>
+                <div id="all-metrics-container">
+                    <!-- Metrics for all nodes will be loaded here -->
+                    <div class="loading-message">Loading multi-node metrics...</div>
                 </div>
             </section>
 
@@ -614,6 +583,188 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
         .power-state.error { color: #ff6600; }
         
         /* Power Control Panel */
+        .node-metrics-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+        
+        .node-metrics-card {
+            background: rgba(0, 255, 136, 0.05);
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            min-height: 200px;
+        }
+        
+        .node-metrics-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+        }
+        
+        .node-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #00ff88;
+        }
+        
+        .node-status {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        
+        .node-status.online {
+            background: rgba(0, 255, 0, 0.2);
+            color: #00ff00;
+            border: 1px solid #00ff00;
+        }
+        
+        .node-status.offline {
+            background: rgba(255, 0, 0, 0.2);
+            color: #ff0000;
+            border: 1px solid #ff0000;
+        }
+        
+        .node-metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .node-metric-item {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #444;
+        }
+        
+        .node-metric-label {
+            font-size: 10px;
+            color: #888;
+            margin-bottom: 3px;
+        }
+        
+        .node-metric-value {
+            font-size: 14px;
+            font-weight: bold;
+            color: #00ff88;
+        }
+        
+        .node-metric-bar {
+            width: 100%;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            margin-top: 3px;
+            overflow: hidden;
+        }
+        
+        .node-metric-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff88, #88ff00);
+            transition: width 0.5s ease;
+        }
+        
+        .node-controls {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .node-control-btn {
+            padding: 5px 8px;
+            border: 1px solid #333;
+            background: rgba(0, 255, 136, 0.1);
+            color: #00ff88;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            min-width: 60px;
+            text-align: center;
+        }
+        
+        .node-control-btn:hover {
+            background: rgba(0, 255, 136, 0.2);
+            border-color: #00ff88;
+            transform: translateY(-1px);
+        }
+        
+        .node-control-btn.performance {
+            border-color: #ff4444;
+            color: #ff4444;
+            background: rgba(255, 68, 68, 0.1);
+        }
+        
+        .node-control-btn.performance:hover {
+            background: rgba(255, 68, 68, 0.2);
+            border-color: #ff6666;
+        }
+        
+        .node-control-btn.balanced {
+            border-color: #ffaa00;
+            color: #ffaa00;
+            background: rgba(255, 170, 0, 0.1);
+        }
+        
+        .node-control-btn.balanced:hover {
+            background: rgba(255, 170, 0, 0.2);
+            border-color: #ffcc44;
+        }
+        
+        .node-control-btn.powersave {
+            border-color: #00ff00;
+            color: #00ff00;
+            background: rgba(0, 255, 0, 0.1);
+        }
+        
+        .node-control-btn.powersave:hover {
+            background: rgba(0, 255, 0, 0.2);
+            border-color: #44ff44;
+        }
+        
+        .node-control-btn.sleep {
+            border-color: #6666ff;
+            color: #6666ff;
+            background: rgba(102, 102, 255, 0.1);
+        }
+        
+        .node-control-btn.sleep:hover {
+            background: rgba(102, 102, 255, 0.2);
+            border-color: #8888ff;
+        }
+        
+        .node-control-btn.reboot {
+            border-color: #ffaa00;
+            color: #ffaa00;
+            background: rgba(255, 170, 0, 0.1);
+        }
+        
+        .node-control-btn.reboot:hover {
+            background: rgba(255, 170, 0, 0.2);
+            border-color: #ffcc44;
+        }
+        
+        .node-control-btn.shutdown {
+            border-color: #ff4444;
+            color: #ff4444;
+            background: rgba(255, 68, 68, 0.1);
+        }
+        
+        .node-control-btn.shutdown:hover {
+            background: rgba(255, 68, 68, 0.2);
+            border-color: #ff6666;
+        }
         .power-control-panel {
             grid-column: 1 / 4;
             grid-row: 3;
@@ -737,7 +888,7 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
         /* Services Panel */
         .services-panel {
             grid-column: 1 / 4;
-            grid-row: 4;
+            grid-row: 3;
             max-height: 200px;
         }
         
@@ -980,67 +1131,158 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
         
         async function fetchMetrics() {
             try {
-                const response = await fetch('/api/metrics');
-                const metrics = await response.json();
+                const response = await fetch('/api/all-metrics');
+                const allMetrics = await response.json();
                 
-                // Basic metrics
-                document.getElementById('cpu').textContent = metrics.cpu + '%';
-                document.getElementById('ram').textContent = metrics.memory.percentage + '%';
-                document.getElementById('disk').textContent = metrics.disk.percentage + '%';
-                
-                // Progress bars
-                document.getElementById('cpu-bar').style.width = metrics.cpu + '%';
-                document.getElementById('ram-bar').style.width = metrics.memory.percentage + '%';
-                document.getElementById('disk-bar').style.width = metrics.disk.percentage + '%';
-                
-                // Network metrics
-                if (metrics.network) {
-                    const networkEl = document.getElementById('network');
-                    const detailsEl = document.getElementById('network-details');
-                    networkEl.textContent = (metrics.network.mb_recv + metrics.network.mb_sent).toFixed(1) + ' MB';
-                    detailsEl.textContent = `↓${metrics.network.mb_recv}MB ↑${metrics.network.mb_sent}MB`;
-                }
-                
-                // Temperature
-                if (metrics.temperature) {
-                    const tempEl = document.getElementById('temperature');
-                    const tempDetailsEl = document.getElementById('temp-details');
-                    
-                    const temps = Object.values(metrics.temperature);
-                    if (temps.length > 0) {
-                        const avgTemp = temps.reduce((a, b) => a + (b.current || 0), 0) / temps.length;
-                        tempEl.textContent = Math.round(avgTemp) + '°C';
-                        tempDetailsEl.textContent = `${temps.length} sensors`;
-                        
-                        // Color code temperature
-                        if (avgTemp > 75) tempEl.style.color = '#ff0000';
-                        else if (avgTemp > 60) tempEl.style.color = '#ffff00';
-                        else tempEl.style.color = '#00ff00';
-                    }
-                }
-                
-                // Power state
-                if (metrics.power_state) {
-                    const powerEl = document.getElementById('power-state');
-                    const powerDetailsEl = document.getElementById('power-details');
-                    
-                    powerEl.textContent = metrics.power_state.toUpperCase();
-                    powerEl.className = `metric-value power-state ${metrics.power_state}`;
-                    
-                    const stateDescriptions = {
-                        'normal': 'Full Performance',
-                        'power_save': 'Power Saving Mode',
-                        'low_power': 'Low Power Mode'
-                    };
-                    powerDetailsEl.textContent = stateDescriptions[metrics.power_state] || 'Unknown';
-                }
-                
-                // Update services
-                updateServices(metrics.services);
+                updateAllMetrics(allMetrics);
                 
             } catch (error) {
                 console.error('Error fetching metrics:', error);
                 addTerminalLog('❌ Error fetching system metrics');
+            }
+        }
+        
+        function updateAllMetrics(allMetrics) {
+            const container = document.getElementById('all-metrics-container');
+            
+            if (!allMetrics || Object.keys(allMetrics).length === 0) {
+                container.innerHTML = '<div class="loading-message">No metrics available</div>';
+                return;
+            }
+            
+            let html = '<div class="node-metrics-container">';
+            
+            for (const [nodeName, nodeData] of Object.entries(allMetrics)) {
+                const isOnline = nodeData.status === 'online';
+                const metrics = nodeData.metrics || {};
+                
+                html += `
+                    <div class="node-metrics-card">
+                        <div class="node-metrics-header">
+                            <div class="node-name">${nodeName}</div>
+                            <div class="node-status ${nodeData.status}">${nodeData.status.toUpperCase()}</div>
+                        </div>`;
+                
+                if (isOnline) {
+                    html += `
+                        <div class="node-metrics-grid">
+                            <div class="node-metric-item">
+                                <div class="node-metric-label">CPU</div>
+                                <div class="node-metric-value">${metrics.cpu || '--'}%</div>
+                                <div class="node-metric-bar">
+                                    <div class="node-metric-fill" style="width: ${metrics.cpu || 0}%"></div>
+                                </div>
+                            </div>
+                            <div class="node-metric-item">
+                                <div class="node-metric-label">RAM</div>
+                                <div class="node-metric-value">${metrics.memory?.percentage || '--'}%</div>
+                                <div class="node-metric-bar">
+                                    <div class="node-metric-fill" style="width: ${metrics.memory?.percentage || 0}%"></div>
+                                </div>
+                            </div>
+                            <div class="node-metric-item">
+                                <div class="node-metric-label">DISK</div>
+                                <div class="node-metric-value">${metrics.disk?.percentage || '--'}%</div>
+                                <div class="node-metric-bar">
+                                    <div class="node-metric-fill" style="width: ${metrics.disk?.percentage || 0}%"></div>
+                                </div>
+                            </div>
+                            <div class="node-metric-item">
+                                <div class="node-metric-label">TEMP</div>
+                                <div class="node-metric-value">${getAverageTemp(metrics.temperature)}°C</div>
+                            </div>
+                        </div>
+                        <div class="node-controls">
+                            <button class="node-control-btn performance" onclick="changeNodePowerMode('${nodeName}', '${nodeData.ip}', ${nodeData.port}, 'performance')">🚀</button>
+                            <button class="node-control-btn balanced" onclick="changeNodePowerMode('${nodeName}', '${nodeData.ip}', ${nodeData.port}, 'balanced')">⚖️</button>
+                            <button class="node-control-btn powersave" onclick="changeNodePowerMode('${nodeName}', '${nodeData.ip}', ${nodeData.port}, 'powersave')">🔋</button>
+                            <button class="node-control-btn sleep" onclick="confirmNodeSystemAction('${nodeName}', '${nodeData.ip}', ${nodeData.port}, 'sleep')">💤</button>
+                            <button class="node-control-btn reboot" onclick="confirmNodeSystemAction('${nodeName}', '${nodeData.ip}', ${nodeData.port}, 'reboot')">🔄</button>
+                            <button class="node-control-btn shutdown" onclick="confirmNodeSystemAction('${nodeName}', '${nodeData.ip}', ${nodeData.port}, 'shutdown')">⏻</button>
+                        </div>`;
+                } else {
+                    html += `
+                        <div style="text-align: center; padding: 20px; color: #ff4444;">
+                            ❌ Node Offline<br>
+                            <small>${nodeData.error || 'Connection failed'}</small>
+                        </div>`;
+                }
+                
+                html += '</div>';
+            }
+            
+            html += '</div>';
+            container.innerHTML = html;
+        }
+        
+        function getAverageTemp(temperature) {
+            if (!temperature) return '--';
+            const temps = Object.values(temperature);
+            if (temps.length === 0) return '--';
+            const avgTemp = temps.reduce((a, b) => a + (b.current || 0), 0) / temps.length;
+            return Math.round(avgTemp);
+        }
+        
+        async function changeNodePowerMode(nodeName, nodeIp, nodePort, mode) {
+            try {
+                const response = await fetch(`http://${nodeIp}:${nodePort}/api/power/mode`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ mode: mode })
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    addTerminalLog(`✅ ${nodeName}: Power mode changed to ${mode}`);
+                } else {
+                    addTerminalLog(`⚠️ ${nodeName}: ${result.message}`);
+                }
+                
+                // Refresh metrics after a short delay
+                setTimeout(fetchMetrics, 1000);
+                
+            } catch (error) {
+                addTerminalLog(`❌ ${nodeName}: Error changing power mode - ${error.message}`);
+            }
+        }
+        
+        function confirmNodeSystemAction(nodeName, nodeIp, nodePort, action) {
+            const actionNames = {
+                'sleep': 'put to sleep',
+                'reboot': 'reboot',
+                'shutdown': 'shutdown'
+            };
+            
+            const actionName = actionNames[action] || action;
+            
+            if (confirm(`Are you sure you want to ${actionName} ${nodeName}?`)) {
+                executeNodeSystemAction(nodeName, nodeIp, nodePort, action);
+            }
+        }
+        
+        async function executeNodeSystemAction(nodeName, nodeIp, nodePort, action) {
+            try {
+                const response = await fetch(`http://${nodeIp}:${nodePort}/api/system/${action}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ delay: 30 }) // 30 seconds delay
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    addTerminalLog(`✅ ${nodeName}: ${result.message}`);
+                } else {
+                    addTerminalLog(`❌ ${nodeName}: ${result.message}`);
+                }
+                
+            } catch (error) {
+                addTerminalLog(`❌ ${nodeName}: Error executing ${action} - ${error.message}`);
             }
         }
         
