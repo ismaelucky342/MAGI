@@ -111,49 +111,120 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
                 "port": CONFIG['port']
             }
             
-            # Get metrics from discovered nodes
-            nodes = discover_nodes()
-            for node in nodes:
-                if node['name'] == CONFIG['node_name']:
-                    continue  # Skip self
-                    
-                node_name = node["name"]
-                node_ip = node["ip"]
-                
-                # Try common MAGI ports
-                ports_to_try = [8080, 8081, 8082, 8083, 8084, 8085]
-                node_metrics = None
-                
-                for port in ports_to_try:
-                    try:
-                        url = f"http://{node_ip}:{port}/api/metrics"
-                        request = urllib.request.Request(url)
-                        request.add_header('User-Agent', 'MAGI-Node/2.0')
+            # Check if we're in demo mode (simulate other nodes)
+            demo_mode = os.environ.get('MAGI_DEMO_MODE', 'false').lower() == 'true'
+            
+            if demo_mode:
+                # Simulate other nodes for demonstration
+                all_nodes = ['GASPAR', 'MELCHIOR', 'BALTASAR']
+                for node_name in all_nodes:
+                    if node_name != CONFIG['node_name']:
+                        # Create simulated metrics
+                        sim_metrics = self.create_simulated_metrics(node_name)
+                        all_metrics[node_name] = {
+                            "status": "online",
+                            "metrics": sim_metrics,
+                            "ip": f"192.168.1.{10 + len(node_name)}",  # Simulated IP
+                            "port": 8080 + len(node_name)  # Simulated port
+                        }
+            else:
+                # Real node discovery
+                nodes = discover_nodes()
+                for node in nodes:
+                    if node['name'] == CONFIG['node_name']:
+                        continue  # Skip self
                         
-                        with urllib.request.urlopen(request, timeout=2) as response:
-                            node_metrics = json.loads(response.read().decode())
-                            all_metrics[node_name] = {
-                                "status": "online",
-                                "metrics": node_metrics,
-                                "ip": node_ip,
-                                "port": port
-                            }
-                            break  # Success, exit port loop
-                    except Exception:
-                        continue  # Try next port
-                
-                # If no port worked, mark as offline
-                if node_name not in all_metrics:
-                    all_metrics[node_name] = {
-                        "status": "offline", 
-                        "error": "No MAGI service found",
-                        "ip": node_ip,
-                        "port": "unknown"
-                    }
+                    node_name = node["name"]
+                    node_ip = node["ip"]
+                    
+                    # First check if it's a known MAGI node name
+                    if node_name not in ['GASPAR', 'MELCHIOR', 'BALTASAR']:
+                        continue
+                    
+                    # Try common MAGI ports
+                    ports_to_try = [8080, 8081, 8082, 8083, 8084, 8085]
+                    node_found = False
+                    
+                    for port in ports_to_try:
+                        try:
+                            # First check if port is open
+                            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                            sock.settimeout(1)
+                            result = sock.connect_ex((node_ip, port))
+                            sock.close()
+                            
+                            if result != 0:  # Port not open
+                                continue
+                                
+                            # Port is open, try to get MAGI metrics
+                            url = f"http://{node_ip}:{port}/api/metrics"
+                            request = urllib.request.Request(url)
+                            request.add_header('User-Agent', 'MAGI-Node/2.0')
+                            
+                            with urllib.request.urlopen(request, timeout=3) as response:
+                                node_metrics = json.loads(response.read().decode())
+                                all_metrics[node_name] = {
+                                    "status": "online",
+                                    "metrics": node_metrics,
+                                    "ip": node_ip,
+                                    "port": port
+                                }
+                                node_found = True
+                                break  # Success, exit port loop
+                        except Exception as e:
+                            continue  # Try next port
+                    
+                    # If no MAGI service found, don't add to metrics (will show as not detected)
+                    if not node_found:
+                        # Only add if we're sure it should be a MAGI node
+                        all_metrics[node_name] = {
+                            "status": "offline", 
+                            "error": f"MAGI service not running on {node_ip}",
+                            "ip": node_ip,
+                            "port": "unknown"
+                        }
             
             self.send_json(all_metrics)
+        except BrokenPipeError:
+            # Client disconnected, ignore
+            pass
         except Exception as e:
-            self.send_error(500, f"Error getting all metrics: {e}")
+            try:
+                self.send_error(500, f"Error getting all metrics: {e}")
+            except BrokenPipeError:
+                pass
+    
+    def create_simulated_metrics(self, node_name):
+        """Create simulated metrics for demo purposes"""
+        import random
+        
+        # Create realistic but fake metrics
+        base_cpu = 20 if node_name == 'GASPAR' else 35 if node_name == 'MELCHIOR' else 50
+        base_mem = 45 if node_name == 'GASPAR' else 60 if node_name == 'MELCHIOR' else 75
+        
+        return {
+            "cpu": base_cpu + random.randint(-10, 15),
+            "memory": {
+                "percentage": base_mem + random.randint(-5, 10),
+                "used": f"{random.randint(2, 8)} GB",
+                "total": "16 GB"
+            },
+            "disk": {
+                "percentage": random.randint(30, 80),
+                "used": f"{random.randint(100, 800)} GB", 
+                "total": "1 TB"
+            },
+            "network": {
+                "upload": f"{random.randint(10, 100)} MB/s",
+                "download": f"{random.randint(20, 200)} MB/s"
+            },
+            "temperature": {
+                "CPU": {"current": random.randint(45, 75)},
+                "GPU": {"current": random.randint(40, 85)}
+            },
+            "power_state": "normal",
+            "services_count": random.randint(5, 15)
+        }
     
     def serve_nodes(self):
         """Serve nodes discovery data"""
