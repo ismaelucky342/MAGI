@@ -146,6 +146,10 @@ def create_systemd_service(node_name, port, install_dir):
     """Crea el servicio systemd"""
     print(f"\n🔧 Creando servicio systemd...")
     
+    # Verificar si el usuario magi existe
+    user_exists = subprocess.run(['id', 'magi'], capture_output=True).returncode == 0
+    user_line = "User=magi\nGroup=magi" if user_exists else "User=root"
+    
     service_content = f"""[Unit]
 Description=MAGI {node_name} Monitoring Node
 After=network.target
@@ -153,8 +157,7 @@ Wants=network.target
 
 [Service]
 Type=simple
-User=magi
-Group=magi
+{user_line}
 WorkingDirectory={install_dir}
 ExecStart=/usr/bin/python3 {install_dir}/magi-node-v2.py {node_name}
 Restart=always
@@ -185,12 +188,29 @@ def setup_magi_user():
     print("\n👤 Configurando usuario del sistema...")
     
     try:
+        # Verificar si el usuario ya existe
+        result = subprocess.run(['id', 'magi'], capture_output=True, text=True)
+        if result.returncode == 0:
+            print("ℹ️  Usuario 'magi' ya existe")
+            return True
+        
         # Crear usuario magi si no existe
-        subprocess.run(['sudo', 'useradd', '-r', '-s', '/bin/false', 'magi'], 
-                      capture_output=True)
-        print("✅ Usuario 'magi' creado")
-    except:
-        print("ℹ️  Usuario 'magi' ya existe")
+        result = subprocess.run(['useradd', '-r', '-s', '/bin/false', '-d', '/opt/magi', 'magi'], 
+                              capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            print("✅ Usuario 'magi' creado")
+            return True
+        else:
+            print(f"⚠️  Error creando usuario: {result.stderr}")
+            # Intentar continuar sin usuario dedicado
+            print("ℹ️  Continuando con usuario root...")
+            return True
+            
+    except Exception as e:
+        print(f"⚠️  Error configurando usuario: {e}")
+        print("ℹ️  Continuando con usuario root...")
+        return True
 
 def install_magi_files(node_name, install_dir):
     """Instala archivos MAGI en el directorio del sistema"""
@@ -205,9 +225,15 @@ def install_magi_files(node_name, install_dir):
         shutil.copy2('power-save-mode.py', install_dir)
         shutil.copytree('images', f'{install_dir}/images', dirs_exist_ok=True)
         
-        # Establecer permisos
-        subprocess.run(['sudo', 'chown', '-R', 'magi:magi', install_dir])
-        subprocess.run(['sudo', 'chmod', '+x', f'{install_dir}/magi-node-v2.py'])
+        # Establecer permisos - verificar si usuario magi existe
+        user_exists = subprocess.run(['id', 'magi'], capture_output=True).returncode == 0
+        
+        if user_exists:
+            subprocess.run(['chown', '-R', 'magi:magi', install_dir], capture_output=True)
+        else:
+            print("ℹ️  Usando permisos de root (usuario magi no disponible)")
+        
+        subprocess.run(['chmod', '+x', f'{install_dir}/magi-node-v2.py'])
         
         print("✅ Archivos instalados correctamente")
         return True
@@ -221,16 +247,34 @@ def enable_and_start_service(service_name):
     
     try:
         # Recargar systemd
-        subprocess.run(['sudo', 'systemctl', 'daemon-reload'], check=True)
+        subprocess.run(['systemctl', 'daemon-reload'], check=True)
+        print("✅ Systemd recargado")
         
         # Habilitar servicio
-        subprocess.run(['sudo', 'systemctl', 'enable', service_name], check=True)
+        subprocess.run(['systemctl', 'enable', service_name], check=True)
+        print("✅ Servicio habilitado para autoarranque")
         
         # Iniciar servicio
-        subprocess.run(['sudo', 'systemctl', 'start', service_name], check=True)
+        result = subprocess.run(['systemctl', 'start', service_name], 
+                              capture_output=True, text=True)
         
-        print("✅ Servicio habilitado e iniciado")
-        return True
+        if result.returncode == 0:
+            print("✅ Servicio iniciado correctamente")
+            
+            # Verificar estado
+            status = subprocess.run(['systemctl', 'is-active', service_name], 
+                                  capture_output=True, text=True)
+            if status.stdout.strip() == 'active':
+                print("✅ Servicio está activo y corriendo")
+            else:
+                print("⚠️  Servicio habilitado pero no está activo")
+            
+            return True
+        else:
+            print(f"❌ Error iniciando servicio: {result.stderr}")
+            print("💡 Puedes iniciarlo manualmente: sudo systemctl start " + service_name)
+            return True  # Consideramos éxito parcial
+            
     except subprocess.CalledProcessError as e:
         print(f"❌ Error con el servicio: {e}")
         return False
