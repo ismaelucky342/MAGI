@@ -1,0 +1,20 @@
+🎯 INSTALADOR MAGI PARA WINDOWS
+================================
+
+✅ DESCARGA COMPLETA: MAGI_Windows_FINAL.zip
+
+📂 PASOS SÚPER FÁCILES:
+
+1. 📥 Extrae "MAGI_Windows_FINAL.zip" 
+2. 📁 Abre la carpeta "MAGI_Windows_Installer"
+3. 📄 Lee "INSTRUCCIONES_FACILES.txt" 
+4. 🖱️ Doble-click en "MAGI_GUI_INSTALLER.py"
+5. 🎉 ¡Disfruta de MAGI!
+
+💡 SÚPER IMPORTANTE:
+- "MAGI_GUI_INSTALLER.py" = CON BOTONES 🖱️
+- "install_magi_simple.py" = SIN BOTONES 💻
+
+🏆 RECOMENDADO: Usar "MAGI_GUI_INSTALLER.py"
+
+🌐 DESPUÉS: http://localhost:8080

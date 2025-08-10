@@ -512,6 +512,13 @@ class MAGIInstallerGUI:
         self.root.geometry("600x500")
         self.root.resizable(False, False)
         
+        # Prevent window from closing accidentally
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+        # Make window stay on top initially
+        self.root.attributes('-topmost', True)
+        self.root.after(1000, lambda: self.root.attributes('-topmost', False))
+        
         self.create_gui()
         
     def create_gui(self):
@@ -654,7 +661,22 @@ class MAGIInstallerGUI:
         thread = threading.Thread(target=install_thread, daemon=True)
         thread.start()
     
+    def on_closing(self):
+        """Handle window closing"""
+        result = messagebox.askyesno("Salir", "¿Estás seguro de que quieres cerrar el instalador?")
+        if result:
+            self.root.quit()
+            self.root.destroy()
+    
     def run(self):
+        # Center window on screen
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        self.root.geometry(f'{width}x{height}+{x}+{y}')
+        
         self.root.mainloop()
 
 def main():

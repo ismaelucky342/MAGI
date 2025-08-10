@@ -1,0 +1,73 @@
+🧙 MAGI Windows - INSTRUCCIONES SÚPER CLARAS
+============================================
+
+## 🎯 ¿QUÉ INSTALADOR USAR?
+
+### 🖱️ QUIERO INSTALADOR CON BOTONES Y VENTANAS (RECOMENDADO)
+**👉 Doble-click en: `MAGI_GUI_INSTALLER.py`**
+- ✅ Interfaz gráfica completa
+- ✅ Botones grandes y claros  
+- ✅ Ventana que NO se cierra
+- ✅ Muestra todo el progreso
+- ✅ Muy fácil de usar
+
+### 💻 QUIERO INSTALADOR DE CONSOLA (ALTERNATIVO)
+**👉 Doble-click en: `install_magi_simple.py`**
+- ✅ Solo texto, sin ventanas
+- ✅ Muy estable
+- ✅ Perfecto si la GUI no funciona
+
+### 📁 NO QUIERO INSTALAR NADA (PORTÁTIL)
+**👉 Doble-click en: `MAGI_Portable.bat`**
+- ✅ Se ejecuta desde donde está
+- ✅ No instala nada en el sistema
+
+## 🚀 PASOS SÚPER SIMPLES:
+
+1. **Extrae esta carpeta** en cualquier sitio de Windows
+2. **Doble-click en `MAGI_GUI_INSTALLER.py`** (el con GUI)
+3. **Aparecerá una ventana** con un botón grande "INSTALAR MAGI NODE"
+4. **Click en el botón** y espera
+5. **¡Listo!** MAGI se instala automáticamente
+
+## 🔧 ¿QUÉ PASA SI NO FUNCIONA?
+
+### ❌ "No se puede abrir" o "Error de Python"
+- Instala Python desde: https://www.python.org/downloads/
+- Durante instalación marca: "Add Python to PATH"
+- Reinicia el ordenador
+- Prueba de nuevo
+
+### ❌ "La ventana se cierra muy rápido"
+- Usa `install_magi_simple.py` en su lugar
+- O abre cmd y ejecuta: `python MAGI_GUI_INSTALLER.py`
+
+### ❌ "Permisos denegados"
+- Click derecho → "Ejecutar como administrador"
+
+## 📋 ARCHIVOS EN ESTA CARPETA:
+
+- **`MAGI_GUI_INSTALLER.py`** ← PRINCIPAL (con botones)
+- **`install_magi_simple.py`** ← Alternativo (consola)  
+- **`MAGI_Portable.bat`** ← Sin instalación
+- **`magi-node-v2.py`** ← Aplicación principal
+- **`images/`** ← Iconos y recursos
+- **Otros archivos** ← No tocar
+
+## 🌐 DESPUÉS DE INSTALAR:
+
+1. Busca "MAGI Node" en el escritorio
+2. Doble-click para ejecutar
+3. Se abre una ventana con botón "INICIAR MAGI"  
+4. Click en "INICIAR MAGI"
+5. Abre navegador en: http://localhost:8080
+6. ¡Disfruta de MAGI! 🎉
+
+## 🎯 RESUMEN ULTRA-RÁPIDO:
+
+**Doble-click → `MAGI_GUI_INSTALLER.py` → Botón "INSTALAR" → ¡Listo!**
+
+============================================
+💡 Si tienes dudas, usa `MAGI_GUI_INSTALLER.py`
+   Es el más fácil y tiene ventanas grandes
+============================================
