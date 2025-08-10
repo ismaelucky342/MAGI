@@ -81,14 +81,46 @@ def install_dependencies():
     """Instala dependencias necesarias"""
     print("\n📦 Instalando dependencias...")
     
+    # Verificar si psutil ya está instalado
     try:
-        subprocess.run([sys.executable, '-m', 'pip', 'install', 'psutil'], 
-                      check=True, capture_output=True)
-        print("✅ Dependencias instaladas")
+        import psutil
+        print("✅ psutil ya está instalado")
         return True
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Error instalando dependencias: {e}")
-        return False
+    except ImportError:
+        pass
+    
+    # Intentar diferentes métodos de instalación
+    install_methods = [
+        # Método 1: pip del usuario
+        [sys.executable, '-m', 'pip', 'install', '--user', 'psutil'],
+        # Método 2: apt en Ubuntu/Debian
+        ['apt', 'install', '-y', 'python3-psutil'],
+        # Método 3: pip del sistema
+        [sys.executable, '-m', 'pip', 'install', 'psutil'],
+        # Método 4: pip3 directo
+        ['pip3', 'install', 'psutil']
+    ]
+    
+    for method in install_methods:
+        try:
+            print(f"   Intentando: {' '.join(method)}")
+            result = subprocess.run(method, check=True, capture_output=True, text=True)
+            
+            # Verificar instalación
+            try:
+                import psutil
+                print("✅ psutil instalado correctamente")
+                return True
+            except ImportError:
+                continue
+                
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            print(f"   ❌ Falló: {e}")
+            continue
+    
+    print("❌ No se pudo instalar psutil automáticamente")
+    print("💡 Instala manualmente: sudo apt install python3-psutil")
+    return False
 
 def update_magi_config(node_name, port):
     """Actualiza la configuración en magi-node-v2.py"""
@@ -240,7 +272,18 @@ def main():
     # Verificar archivos necesarios
     if not os.path.exists('magi-node-v2.py'):
         print("❌ magi-node-v2.py no encontrado")
+        print("💡 Ejecuta el instalador desde el directorio MAGI")
         return False
+    
+    # Verificar si ya hay una instancia corriendo
+    try:
+        result = subprocess.run(['pgrep', '-f', 'magi-node-v2.py'], 
+                              capture_output=True, text=True)
+        if result.returncode == 0:
+            print("⚠️  Detectada instancia MAGI corriendo. Deteniendo...")
+            subprocess.run(['pkill', '-f', 'magi-node-v2.py'], capture_output=True)
+    except:
+        pass
     
     # Obtener configuración
     local_ip = get_local_ip()
@@ -253,6 +296,20 @@ def main():
     print(f"   IP: {local_ip}")
     print(f"   Puerto: {port}")
     print(f"   Directorio: {install_dir}")
+    
+    # Verificar si el servicio ya existe
+    service_name = f"magi-{node_name.lower()}"
+    service_exists = os.path.exists(f"/etc/systemd/system/{service_name}.service")
+    if service_exists:
+        print(f"\n⚠️  El servicio {service_name} ya existe.")
+        choice = input("¿Desinstalar y reinstalar? (y/N): ").strip().lower()
+        if choice == 'y':
+            subprocess.run(['systemctl', 'stop', service_name], capture_output=True)
+            subprocess.run(['systemctl', 'disable', service_name], capture_output=True)
+            os.remove(f"/etc/systemd/system/{service_name}.service")
+        else:
+            print("❌ Instalación cancelada")
+            return False
     
     input("\nPresiona Enter para continuar...")
     
