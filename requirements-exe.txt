@@ -1,0 +1,7 @@
+# 🧙‍♂️ MAGI Windows EXE Builder
+# Creates standalone executables for Windows
+
+# Requirements file for PyInstaller
+pyinstaller>=5.0
+pillow>=8.0.0
+requests>=2.25.0

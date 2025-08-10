@@ -1,49 +1,143 @@
-### Instalación rápida en Windows
+# 🧙‍♂️ MAGI - Ultra-Simple Distributed Monitoring
 
-1. Abre PowerShell y navega a la carpeta del repositorio MAGI.
-2. Ejecuta el script automatizado:
-  ```powershell
-  ./install-windows.ps1
-  ```
-3. Cuando termine, inicia la app con:
-  ```powershell
-  cd frontend
-  npm run electron:start
-  ```
-4. ¡Listo! MAGI se abrirá como aplicación de escritorio.
+**Distributed Node Monitoring System**
 
-## Desktop App (Electron)
+> Inspired by Evangelion's MAGI supercomputer system
+> Ultra-simple, cross-platform, zero-dependency hell
 
-MAGI puede ejecutarse como aplicación de escritorio en Linux y Windows usando Electron.
+## 🎯 Philosophy
+- **One Python file per node** - No complex installations
+- **Pure HTML/CSS/JS** - No frameworks, no build processes
+- **Cross-platform** - Works on Linux, Windows, macOS out of the box
+- **Self-contained** - Each node serves its own web interface
 
-### Ejecución en modo app (desarrollo)
+## 🏗️ Architecture
 
-1. Instala dependencias adicionales:
-  ```bash
-  cd frontend
-  npm install --save-dev electron electron-builder concurrently cross-env wait-on
-  ```
-2. Inicia la app de escritorio:
-  ```bash
-  npm run electron:start
-  ```
-  Esto abrirá la interfaz React en una ventana nativa.
+```
+GASPAR (192.168.1.100:8080)    MELCHIOR (192.168.1.101:8080)    BALTASAR (192.168.1.102:8080)
+├── magi-node.py               ├── magi-node.py                 ├── magi-node.py
+├── web/                       ├── web/                         ├── web/
+│   ├── index.html            │   ├── index.html              │   ├── index.html
+│   ├── style.css             │   ├── style.css               │   ├── style.css
+│   └── app.js                │   └── app.js                  │   └── app.js
+└── config.json               └── config.json                 └── config.json
+```
 
-### Empaquetar la app (producción)
+## 🚀 Quick Start
 
-1. Construye la app React:
-  ```bash
-  npm run build
-  ```
-2. Empaqueta la app de escritorio:
-  ```bash
-  npx electron-builder
-  ```
-  El instalador estará disponible en la carpeta `dist/`.
+### 1. Install on each node (3 commands total):
+```bash
+# Download MAGI
+curl -O https://raw.githubusercontent.com/tu-repo/MAGI/main/install.py
+python install.py --node-name=GASPAR --ip=192.168.1.100
 
-### Notas
-- Puedes ejecutar la app en cualquier nodo (Baltasar, Gaspar o Melchor).
-- La app puede convivir con la versión web y acceder a los mismos servicios backend.
+# Start MAGI
+python magi-node.py
+```
+
+### 2. Access any node:
+- GASPAR: http://192.168.1.100:8080
+- MELCHIOR: http://192.168.1.101:8080  
+- BALTASAR: http://192.168.1.102:8080
+
+### 3. Central monitoring:
+- Open any node's web interface
+- It automatically discovers and connects to other nodes
+- See all 3 nodes in one dashboard
+
+## � Installation
+
+### 🌟 Universal Installer (Recommended)
+Works on **Linux**, **Windows**, and **macOS**:
+
+```bash
+# Download MAGI and run universal installer
+python3 install-universal.py
+```
+
+### 🐧 Linux Installation
+
+#### Option 1: User Service (No sudo required)
+```bash
+./install-user-service.sh
+```
+
+#### Option 2: System Service (Requires sudo)
+```bash
+./install-service.sh
+```
+
+#### Option 3: Manual
+```bash
+python3 magi-node.py GASPAR
+```
+
+### 🪟 Windows Installation
+
+#### Option 1: PowerShell (Modern Windows)
+```powershell
+# Run as Administrator
+.\Install-MAGI.ps1
+```
+
+#### Option 2: Simple Batch File
+```cmd
+# Double-click or run
+install-windows-simple.bat
+```
+
+#### Option 3: Manual
+```cmd
+python magi-node.py GASPAR
+```
+
+### 🍎 macOS Installation
+
+#### Option 1: Universal Installer
+```bash
+python3 install-universal.py
+```
+
+#### Option 2: Manual
+```bash
+python3 magi-node.py GASPAR
+```
+
+---
+
+## 📋 Prerequisites
+
+### All Platforms
+- **Python 3.6+** with `pip`
+- **Network connectivity** between nodes
+- **Port 8081** available (configurable)
+
+### Platform-Specific Downloads
+- **Windows**: [Python.org](https://python.org) - ⚠️ Check "Add Python to PATH"
+- **Linux**: Usually pre-installed, or `sudo apt install python3`
+- **macOS**: `brew install python3` or [Python.org](https://python.org)
+
+---
+
+## 🔧 Features
+
+- **Real-time metrics**: CPU, RAM, Disk, Network
+- **System info**: OS, uptime, processes
+- **Cross-node communication**: Each node can see others
+- **Web terminal**: Execute commands remotely
+- **Auto-discovery**: Nodes find each other automatically
+- **Responsive UI**: Works on desktop and mobile
+
+## 💻 Supported Platforms
+
+- ✅ **Linux** (Ubuntu, CentOS, Arch, etc.)
+- ✅ **Windows** (10, 11)  
+- ✅ **macOS** (Intel, Apple Silicon)
+- ✅ **Python 3.6+** (usually pre-installed)
+
+---
+
+*No npm. No node_modules. No build process. Just Python and HTML.* 🐍✨
 # MAGI - Distributed Node Monitoring System
 
 <div align="center">
