@@ -37,10 +37,48 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
             self.serve_metrics()
         elif self.path == "/api/nodes":
             self.serve_nodes()
+        elif self.path == "/api/services":
+            self.serve_all_services()
         elif self.path == "/api/info":
             self.serve_info()
         elif self.path.startswith("/images/"):
             self.serve_image()
+        else:
+            self.send_error(404, "Not Found")
+    
+    def do_POST(self):
+        """Handle HTTP POST requests for system control"""
+        content_length = int(self.headers.get('Content-Length', 0))
+        post_data = self.rfile.read(content_length)
+        
+        try:
+            data = json.loads(post_data.decode('utf-8'))
+        except json.JSONDecodeError:
+            self.send_error(400, "Invalid JSON")
+            return
+        
+        if self.path == '/api/power/mode':
+            mode = data.get('mode')
+            if mode:
+                result = change_power_mode(mode)
+                self.send_json(result)
+            else:
+                self.send_json({"status": "error", "message": "Power mode not specified"})
+        
+        elif self.path == '/api/system/shutdown':
+            delay = data.get('delay', 60)  # default 60 seconds
+            result = schedule_system_shutdown(delay)
+            self.send_json(result)
+        
+        elif self.path == '/api/system/reboot':
+            delay = data.get('delay', 60)  # default 60 seconds  
+            result = schedule_system_reboot(delay)
+            self.send_json(result)
+        
+        elif self.path == '/api/system/sleep':
+            result = system_sleep()
+            self.send_json(result)
+        
         else:
             self.send_error(404, "Not Found")
     
@@ -58,9 +96,86 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
         self.send_json(metrics)
     
     def serve_nodes(self):
-        """Serve discovered nodes as JSON"""
-        nodes = discover_nodes()
-        self.send_json(nodes)
+        """Serve nodes discovery data"""
+        try:
+            nodes = discover_nodes()
+            self.send_json(nodes)
+        except Exception as e:
+            self.send_error(500, f"Error discovering nodes: {e}")
+    
+    def serve_all_services(self):
+        """Serve comprehensive services from all nodes"""
+        try:
+            all_services = {}
+            nodes = discover_nodes()
+            
+            for node in nodes:
+                node_name = node["name"]
+                node_services = node.get("services", {})
+                
+                # Añadir información del nodo a cada servicio
+                for service_name, service_info in node_services.items():
+                    service_key = f"{service_name}@{node_name}"
+                    all_services[service_key] = {
+                        **service_info,
+                        "node": node_name,
+                        "node_ip": node["ip"],
+                        "node_status": node["status"]
+                    }
+            
+            self.send_json(all_services)
+        except Exception as e:
+            self.send_error(500, f"Error getting services: {e}")
+    
+    def handle_power_mode(self):
+        """Handle power mode change requests"""
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode('utf-8'))
+            
+            mode = data.get('mode', 'normal')
+            result = change_power_mode(mode)
+            
+            self.send_json(result)
+        except Exception as e:
+            self.send_error(500, f"Error changing power mode: {e}")
+    
+    def handle_system_shutdown(self):
+        """Handle system shutdown requests"""
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode('utf-8'))
+            
+            delay = data.get('delay', 60)  # 60 seconds default
+            result = schedule_system_shutdown(delay)
+            
+            self.send_json(result)
+        except Exception as e:
+            self.send_error(500, f"Error scheduling shutdown: {e}")
+    
+    def handle_system_reboot(self):
+        """Handle system reboot requests"""
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode('utf-8'))
+            
+            delay = data.get('delay', 60)  # 60 seconds default
+            result = schedule_system_reboot(delay)
+            
+            self.send_json(result)
+        except Exception as e:
+            self.send_error(500, f"Error scheduling reboot: {e}")
+    
+    def handle_system_sleep(self):
+        """Handle system sleep/suspend requests"""
+        try:
+            result = system_sleep()
+            self.send_json(result)
+        except Exception as e:
+            self.send_error(500, f"Error putting system to sleep: {e}")
     
     def serve_info(self):
         """Serve node info as JSON"""
@@ -197,6 +312,41 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
                         <div class="metric-label">POWER</div>
                         <div class="metric-value power-state" id="power-state">--</div>
                         <div class="metric-details" id="power-details">--</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Power Control Panel -->
+            <section class="panel power-control-panel">
+                <h3>⚡ Power Control</h3>
+                <div class="power-controls">
+                    <div class="power-mode-controls">
+                        <h4>Performance Mode</h4>
+                        <div class="button-group">
+                            <button class="power-btn performance" onclick="changePowerMode('performance')">
+                                🚀 Performance
+                            </button>
+                            <button class="power-btn balanced" onclick="changePowerMode('balanced')">
+                                ⚖️ Balanced
+                            </button>
+                            <button class="power-btn powersave" onclick="changePowerMode('powersave')">
+                                🔋 Power Save
+                            </button>
+                        </div>
+                    </div>
+                    <div class="system-controls">
+                        <h4>System Control</h4>
+                        <div class="button-group">
+                            <button class="system-btn sleep" onclick="confirmSystemAction('sleep')">
+                                💤 Sleep
+                            </button>
+                            <button class="system-btn reboot" onclick="confirmSystemAction('reboot')">
+                                🔄 Reboot
+                            </button>
+                            <button class="system-btn shutdown" onclick="confirmSystemAction('shutdown')">
+                                ⏻ Shutdown
+                            </button>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -463,6 +613,120 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
         .power-state.offline { color: #ff0000; }
         .power-state.error { color: #ff6600; }
         
+        /* Power Control Panel */
+        .power-control-panel {
+            grid-column: 1 / 4;
+            grid-row: 3;
+        }
+        
+        .power-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 15px;
+        }
+        
+        .power-mode-controls h4,
+        .system-controls h4 {
+            margin: 0 0 10px 0;
+            color: #00ff88;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .power-btn, .system-btn {
+            padding: 10px 15px;
+            border: 2px solid #333;
+            background: rgba(0, 255, 136, 0.1);
+            color: #00ff88;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            min-width: 90px;
+            text-align: center;
+        }
+        
+        .power-btn:hover, .system-btn:hover {
+            background: rgba(0, 255, 136, 0.2);
+            border-color: #00ff88;
+            transform: translateY(-2px);
+        }
+        
+        .power-btn.performance {
+            border-color: #ff4444;
+            color: #ff4444;
+            background: rgba(255, 68, 68, 0.1);
+        }
+        
+        .power-btn.performance:hover {
+            background: rgba(255, 68, 68, 0.2);
+            border-color: #ff6666;
+        }
+        
+        .power-btn.balanced {
+            border-color: #ffaa00;
+            color: #ffaa00;
+            background: rgba(255, 170, 0, 0.1);
+        }
+        
+        .power-btn.balanced:hover {
+            background: rgba(255, 170, 0, 0.2);
+            border-color: #ffcc44;
+        }
+        
+        .power-btn.powersave {
+            border-color: #00ff00;
+            color: #00ff00;
+            background: rgba(0, 255, 0, 0.1);
+        }
+        
+        .power-btn.powersave:hover {
+            background: rgba(0, 255, 0, 0.2);
+            border-color: #44ff44;
+        }
+        
+        .system-btn.sleep {
+            border-color: #6666ff;
+            color: #6666ff;
+            background: rgba(102, 102, 255, 0.1);
+        }
+        
+        .system-btn.sleep:hover {
+            background: rgba(102, 102, 255, 0.2);
+            border-color: #8888ff;
+        }
+        
+        .system-btn.reboot {
+            border-color: #ffaa00;
+            color: #ffaa00;
+            background: rgba(255, 170, 0, 0.1);
+        }
+        
+        .system-btn.reboot:hover {
+            background: rgba(255, 170, 0, 0.2);
+            border-color: #ffcc44;
+        }
+        
+        .system-btn.shutdown {
+            border-color: #ff4444;
+            color: #ff4444;
+            background: rgba(255, 68, 68, 0.1);
+        }
+        
+        .system-btn.shutdown:hover {
+            background: rgba(255, 68, 68, 0.2);
+            border-color: #ff6666;
+        }
+        
         /* Nodes Panel */
         .nodes-panel {
             grid-column: 3;
@@ -473,7 +737,7 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
         /* Services Panel */
         .services-panel {
             grid-column: 1 / 4;
-            grid-row: 2;
+            grid-row: 4;
             max-height: 200px;
         }
         
@@ -540,24 +804,82 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
         
         .service-item {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px;
-            margin-bottom: 5px;
+            flex-direction: column;
+            padding: 10px;
+            margin-bottom: 8px;
             background: rgba(255, 51, 51, 0.1);
             border: 1px solid rgba(255, 51, 51, 0.3);
+            border-radius: 2px;
+        }
+        
+        .service-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
         }
         
         .service-name {
             font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .service-name.online {
+            color: #00ff00;
+        }
+        
+        .service-name.offline {
+            color: #ff0000;
+        }
+        
+        .service-name.power_save {
+            color: #ffff00;
+        }
+        
+        .service-node {
+            font-size: 10px;
+            opacity: 0.7;
+            color: #00ffff;
+        }
+        
+        .service-details {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
         }
         
         .service-status.running {
             background: rgba(0, 255, 0, 0.2);
             border: 1px solid #00ff00;
             color: #00ff00;
-            padding: 2px 8px;
+            padding: 2px 6px;
+            font-size: 9px;
+            border-radius: 2px;
+        }
+        
+        .service-status.port_open {
+            background: rgba(255, 165, 0, 0.2);
+            border: 1px solid #ffa500;
+            color: #ffa500;
+            padding: 2px 6px;
+            font-size: 9px;
+            border-radius: 2px;
+        }
+        
+        .service-description {
             font-size: 10px;
+            opacity: 0.8;
+            color: #cccccc;
+        }
+        
+        .service-port {
+            font-size: 9px;
+            color: #00ffff;
+            background: rgba(0, 255, 255, 0.1);
+            padding: 1px 4px;
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 2px;
         }
         
         /* Terminal Section */
@@ -731,20 +1053,53 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
             
             container.innerHTML = '';
             
-            Object.entries(services).forEach(([name, service]) => {
+            Object.entries(services).forEach(([serviceKey, service]) => {
                 const serviceDiv = document.createElement('div');
                 serviceDiv.className = 'service-item';
                 
+                // Extraer nombre del servicio y nodo
+                const [serviceName, nodeName] = serviceKey.includes('@') ? 
+                    serviceKey.split('@') : [serviceKey, 'LOCAL'];
+                
+                // Determinar color según estado del nodo
+                let nodeStatusClass = '';
+                if (service.node_status === 'offline') nodeStatusClass = 'offline';
+                else if (service.node_status === 'power_save') nodeStatusClass = 'power_save';
+                else if (service.node_status === 'online') nodeStatusClass = 'online';
+                
+                // Construir HTML del servicio
+                const portsHtml = service.ports && service.ports.length > 0 ? 
+                    service.ports.map(port => `<span class="service-port">:${port}</span>`).join(' ') : '';
+                
+                const processIcon = service.process_detected ? '🟢' : '🔶';
+                const statusText = service.status === 'running' ? 'RUNNING' : 'PORT OPEN';
+                
                 serviceDiv.innerHTML = `
-                    <span class="service-name">${name.toUpperCase()}</span>
-                    <div>
-                        <span class="service-status ${service.status}">${service.status}</span>
-                        ${service.port ? `<span style="font-size: 10px; margin-left: 5px;">:${service.port}</span>` : ''}
+                    <div class="service-header">
+                        <span class="service-name ${nodeStatusClass}">${serviceName.toUpperCase()}</span>
+                        <span class="service-node">@${nodeName}</span>
+                    </div>
+                    <div class="service-details">
+                        <span class="service-status ${service.status}">${processIcon} ${statusText}</span>
+                        <span class="service-description">${service.description || 'Service'}</span>
+                        ${portsHtml}
                     </div>
                 `;
                 
                 container.appendChild(serviceDiv);
             });
+        }
+        
+        // Nueva función para obtener todos los servicios
+        async function fetchAllServices() {
+            try {
+                const response = await fetch('/api/services');
+                const services = await response.json();
+                updateServices(services);
+            } catch (error) {
+                console.error('Error fetching services:', error);
+                addTerminalLog('❌ Error fetching services');
+            }
         }
         
         async function fetchNodes() {
@@ -775,12 +1130,24 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
                         powerStateHtml = `<div class="node-info">🔋 ${node.power_state}</div>`;
                     }
                     
+                    // Mostrar servicios principales del nodo
+                    let servicesHtml = '';
+                    if (node.services && Object.keys(node.services).length > 0) {
+                        const serviceCount = Object.keys(node.services).length;
+                        const mainServices = Object.keys(node.services).slice(0, 2).join(', ');
+                        servicesHtml = `<div class="node-info">⚙️ ${serviceCount} services</div>`;
+                        if (mainServices) {
+                            servicesHtml += `<div class="node-info" style="font-size: 9px;">📊 ${mainServices}</div>`;
+                        }
+                    }
+                    
                     nodeCard.innerHTML = `
                         <div class="node-status-badge">${statusText}</div>
                         <div class="node-name">${node.name}</div>
                         <div class="node-info">${node.ip}:${node.port}</div>
                         ${responseTimeHtml}
                         ${powerStateHtml}
+                        ${servicesHtml}
                         <div class="node-info">Last: ${node.last_seen}</div>
                     `;
                     
@@ -829,6 +1196,96 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
             }
         }
         
+        // Power Management Functions
+        async function changePowerMode(mode) {
+            try {
+                addTerminalLog(`🔄 Changing power mode to ${mode}...`);
+                
+                const response = await fetch('/api/power/mode', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ mode: mode })
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    addTerminalLog(`✅ ${result.message}`);
+                } else {
+                    addTerminalLog(`❌ Error: ${result.message}`);
+                }
+            } catch (error) {
+                addTerminalLog(`❌ Error changing power mode: ${error}`);
+            }
+        }
+        
+        function confirmSystemAction(action) {
+            const actionMessages = {
+                'sleep': 'suspend the system',
+                'reboot': 'reboot the system',
+                'shutdown': 'shutdown the system'
+            };
+            
+            const message = actionMessages[action] || 'perform this action';
+            
+            if (confirm(`Are you sure you want to ${message}?`)) {
+                performSystemAction(action);
+            }
+        }
+        
+        async function performSystemAction(action) {
+            try {
+                let endpoint;
+                let delay = 30; // 30 seconds delay for reboot/shutdown
+                
+                switch(action) {
+                    case 'sleep':
+                        endpoint = '/api/system/sleep';
+                        addTerminalLog('💤 Putting system to sleep...');
+                        break;
+                    case 'reboot':
+                        endpoint = '/api/system/reboot';
+                        addTerminalLog(`🔄 Scheduling system reboot in ${delay} seconds...`);
+                        break;
+                    case 'shutdown':
+                        endpoint = '/api/system/shutdown';
+                        addTerminalLog(`⏻ Scheduling system shutdown in ${delay} seconds...`);
+                        break;
+                    default:
+                        throw new Error('Invalid action');
+                }
+                
+                const body = action === 'sleep' ? {} : { delay: delay };
+                
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    addTerminalLog(`✅ ${result.message}`);
+                    
+                    if (action === 'reboot' || action === 'shutdown') {
+                        // Show countdown
+                        setTimeout(() => {
+                            addTerminalLog(`⚠️ System ${action} will occur in ${delay} seconds`);
+                        }, 1000);
+                    }
+                } else {
+                    addTerminalLog(`❌ Error: ${result.message}`);
+                }
+            } catch (error) {
+                addTerminalLog(`❌ Error performing ${action}: ${error}`);
+            }
+        }
+        
         function checkNetworkInfo() {
             const ipEl = document.getElementById('network-ip');
             ipEl.textContent = window.location.hostname || 'localhost';
@@ -845,10 +1302,12 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
             // Initial fetch
             fetchMetrics();
             fetchNodes();
+            fetchAllServices();
             
             // Set up intervals
             metricsInterval = setInterval(fetchMetrics, 5000);
             nodesInterval = setInterval(fetchNodes, 6000);
+            setInterval(fetchAllServices, 8000); // Servicios cada 8 segundos
             
             // Update timestamp every second
             setInterval(updateTimestamp, 1000);
@@ -857,13 +1316,125 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
             setTimeout(() => addTerminalLog('⚡ Dashboard initialized'), 500);
             setTimeout(() => addTerminalLog('📡 Real-time monitoring active'), 1000);
             setTimeout(() => addTerminalLog('🔋 Power management enabled'), 1500);
+            setTimeout(() => addTerminalLog('⚙️ Enhanced service detection active'), 2000);
         }
         
         // Start monitoring when page loads
         document.addEventListener('DOMContentLoaded', startMonitoring);
         """
 
-def get_system_metrics():
+def change_power_mode(mode):
+    """Change system power mode"""
+    try:
+        success = False
+        
+        # Try cpupower first
+        if subprocess.run(['which', 'cpupower'], capture_output=True).returncode == 0:
+            if mode == "performance":
+                result = subprocess.run(['cpupower', 'frequency-set', '-g', 'performance'], 
+                                     capture_output=True, check=False)
+                success = result.returncode == 0
+            elif mode == "powersave":
+                result = subprocess.run(['cpupower', 'frequency-set', '-g', 'powersave'], 
+                                     capture_output=True, check=False)
+                success = result.returncode == 0
+            elif mode == "balanced":
+                result = subprocess.run(['cpupower', 'frequency-set', '-g', 'ondemand'], 
+                                     capture_output=True, check=False)
+                success = result.returncode == 0
+        
+        # Alternative method using sysfs
+        if not success:
+            try:
+                governor_files = [
+                    '/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor',
+                    '/sys/devices/system/cpu/cpufreq/policy0/scaling_governor'
+                ]
+                
+                governor_map = {
+                    "performance": "performance",
+                    "powersave": "powersave", 
+                    "balanced": "ondemand"
+                }
+                
+                target_governor = governor_map.get(mode)
+                if target_governor:
+                    for gov_file in governor_files:
+                        try:
+                            with open(gov_file, 'w') as f:
+                                f.write(target_governor)
+                            success = True
+                            break
+                        except (FileNotFoundError, PermissionError):
+                            continue
+            except Exception:
+                pass
+        
+        if success:
+            return {
+                "status": "success",
+                "message": f"Power mode changed to {mode}",
+                "mode": mode
+            }
+        else:
+            return {
+                "status": "warning",
+                "message": f"Power mode change requested ({mode}) but may require root privileges",
+                "mode": mode
+            }
+            
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error changing power mode: {e}"
+        }
+
+def schedule_system_shutdown(delay):
+    """Schedule system shutdown"""
+    try:
+        subprocess.run(['shutdown', '-h', f'+{delay//60}'], check=True)
+        return {
+            "status": "success",
+            "message": f"System shutdown scheduled in {delay} seconds",
+            "action": "shutdown",
+            "delay": delay
+        }
+    except subprocess.CalledProcessError as e:
+        return {
+            "status": "error",
+            "message": f"Error scheduling shutdown: {e}"
+        }
+
+def schedule_system_reboot(delay):
+    """Schedule system reboot"""
+    try:
+        subprocess.run(['shutdown', '-r', f'+{delay//60}'], check=True)
+        return {
+            "status": "success",
+            "message": f"System reboot scheduled in {delay} seconds",
+            "action": "reboot",
+            "delay": delay
+        }
+    except subprocess.CalledProcessError as e:
+        return {
+            "status": "error",
+            "message": f"Error scheduling reboot: {e}"
+        }
+
+def system_sleep():
+    """Put system to sleep/suspend"""
+    try:
+        subprocess.run(['systemctl', 'suspend'], check=True)
+        return {
+            "status": "success",
+            "message": "System going to sleep",
+            "action": "sleep"
+        }
+    except subprocess.CalledProcessError as e:
+        return {
+            "status": "error",
+            "message": f"Error putting system to sleep: {e}"
+        }
     """Get enhanced system metrics including network, temperature, power state and services"""
     try:
         # CPU usage (average over 1 second)
@@ -948,30 +1519,144 @@ def get_system_metrics():
         return get_system_metrics_fallback()
 
 def detect_services():
-    """Detect common services running on the system"""
+    """Detect comprehensive services running on the system"""
     services = {}
-    common_services = {
-        "nextcloud": ["nginx", "apache2", "nextcloud"],
-        "jellyfin": ["jellyfin"],
-        "plex": ["plexmediaserver", "plex"],
-        "docker": ["docker", "dockerd"],
-        "ssh": ["sshd", "ssh"],
-        "web": ["nginx", "apache2", "httpd"],
-        "database": ["mysql", "postgresql", "mariadb"],
-        "samba": ["smbd", "nmbd"]
+    
+    # Servicios comunes con sus puertos y procesos
+    service_definitions = {
+        "nextcloud": {
+            "processes": ["nginx", "apache2", "nextcloud", "php-fpm"],
+            "ports": [80, 443, 8080],
+            "description": "Cloud Storage"
+        },
+        "jellyfin": {
+            "processes": ["jellyfin"],
+            "ports": [8096, 8920],
+            "description": "Media Server"
+        },
+        "plex": {
+            "processes": ["plexmediaserver", "plex"],
+            "ports": [32400],
+            "description": "Media Server"
+        },
+        "emby": {
+            "processes": ["emby", "embyserver"],
+            "ports": [8096],
+            "description": "Media Server"
+        },
+        "docker": {
+            "processes": ["docker", "dockerd", "containerd"],
+            "ports": [2375, 2376],
+            "description": "Container Platform"
+        },
+        "ssh": {
+            "processes": ["sshd", "ssh"],
+            "ports": [22],
+            "description": "Remote Access"
+        },
+        "web": {
+            "processes": ["nginx", "apache2", "httpd", "lighttpd"],
+            "ports": [80, 443, 8080, 8443],
+            "description": "Web Server"
+        },
+        "database": {
+            "processes": ["mysql", "mysqld", "postgresql", "postgres", "mariadb"],
+            "ports": [3306, 5432],
+            "description": "Database"
+        },
+        "samba": {
+            "processes": ["smbd", "nmbd"],
+            "ports": [139, 445],
+            "description": "File Sharing"
+        },
+        "transmission": {
+            "processes": ["transmission-daemon", "transmission"],
+            "ports": [9091],
+            "description": "Torrent Client"
+        },
+        "pihole": {
+            "processes": ["pihole", "dnsmasq", "lighttpd"],
+            "ports": [53, 80],
+            "description": "DNS Filter"
+        },
+        "homeassistant": {
+            "processes": ["homeassistant", "hass"],
+            "ports": [8123],
+            "description": "Home Automation"
+        },
+        "mqtt": {
+            "processes": ["mosquitto", "mqtt"],
+            "ports": [1883, 8883],
+            "description": "IoT Messaging"
+        },
+        "vnc": {
+            "processes": ["vncserver", "vnc", "x11vnc"],
+            "ports": [5900, 5901],
+            "description": "Remote Desktop"
+        },
+        "magi": {
+            "processes": ["magi-node", "python3"],
+            "ports": [8080, 8081, 8082],
+            "description": "MAGI Monitor"
+        }
     }
     
     try:
-        running_processes = [p.name().lower() for p in psutil.process_iter(['name'])]
+        # Obtener procesos en ejecución
+        running_processes = []
+        for p in psutil.process_iter(['name', 'cmdline']):
+            try:
+                name = p.info['name'].lower()
+                cmdline = ' '.join(p.info['cmdline'] or []).lower()
+                running_processes.append((name, cmdline))
+            except:
+                continue
         
-        for service_name, process_names in common_services.items():
-            service_running = any(proc in running_processes for proc in process_names)
-            if service_running:
-                port = get_service_port(service_name)
+        # Obtener puertos abiertos
+        open_ports = set()
+        for conn in psutil.net_connections(kind='inet'):
+            if conn.laddr and conn.status == 'LISTEN':
+                open_ports.add(conn.laddr.port)
+        
+        # Detectar servicios
+        for service_name, service_def in service_definitions.items():
+            # Verificar procesos
+            process_found = False
+            for proc_name, cmdline in running_processes:
+                if any(proc in proc_name or proc in cmdline for proc in service_def["processes"]):
+                    process_found = True
+                    break
+            
+            # Verificar puertos
+            port_found = any(port in open_ports for port in service_def["ports"])
+            active_ports = [port for port in service_def["ports"] if port in open_ports]
+            
+            if process_found or port_found:
                 services[service_name] = {
-                    "status": "running",
-                    "port": port
+                    "status": "running" if process_found else "port_open",
+                    "ports": active_ports if active_ports else service_def["ports"][:1],
+                    "description": service_def["description"],
+                    "process_detected": process_found,
+                    "port_detected": port_found
                 }
+        
+        # Detectar servicios adicionales por puertos comunes
+        additional_ports = {
+            21: "FTP", 25: "SMTP", 53: "DNS", 110: "POP3", 143: "IMAP",
+            993: "IMAPS", 995: "POP3S", 3389: "RDP", 5432: "PostgreSQL",
+            6379: "Redis", 27017: "MongoDB", 9200: "Elasticsearch"
+        }
+        
+        for port, service_name in additional_ports.items():
+            if port in open_ports and service_name.lower() not in services:
+                services[service_name.lower()] = {
+                    "status": "port_open",
+                    "ports": [port],
+                    "description": service_name,
+                    "process_detected": False,
+                    "port_detected": True
+                }
+    
     except Exception as e:
         print(f"Error detecting services: {e}")
     
@@ -1004,7 +1689,7 @@ def get_system_metrics_fallback():
     }
 
 def discover_nodes():
-    """Discover other MAGI nodes on the network with power state detection"""
+    """Discover other MAGI nodes on the network with power state detection and services"""
     nodes = []
     current_node = CONFIG["node_name"]
     current_port = CONFIG["port"]
@@ -1020,9 +1705,11 @@ def discover_nodes():
                 metrics = get_system_metrics()
                 power_state = metrics.get("power_state", "normal")
                 node_status = "power_save" if power_state in ["power_save", "low_power"] else "online"
+                services = metrics.get("services", {})
             except:
                 node_status = "online"
                 power_state = "normal"
+                services = {}
                 
             nodes.append({
                 "name": node_name,
@@ -1032,7 +1719,8 @@ def discover_nodes():
                 "response_time": 0,
                 "self": True,
                 "last_seen": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "power_state": power_state
+                "power_state": power_state,
+                "services": services
             })
             continue
         
@@ -1050,17 +1738,21 @@ def discover_nodes():
             if result == 0:
                 node_status = "online"
                 power_state = "normal"
+                services = {}
+                
                 try:
+                    # Obtener métricas del nodo remoto
                     url = f"http://{node_ip}:{node_port}/api/metrics"
                     req = urllib.request.Request(url, headers={'User-Agent': 'MAGI-Discovery'})
                     with urllib.request.urlopen(req, timeout=2) as response:
                         if response.status == 200:
                             metrics_data = json.loads(response.read().decode())
                             power_state = metrics_data.get("power_state", "normal")
+                            services = metrics_data.get("services", {})
                             if power_state in ["power_save", "low_power"]:
                                 node_status = "power_save"
-                except:
-                    pass
+                except Exception as e:
+                    print(f"Error getting remote metrics from {node_name}: {e}")
                     
                 nodes.append({
                     "name": node_name,
@@ -1070,7 +1762,8 @@ def discover_nodes():
                     "response_time": response_time,
                     "self": False,
                     "last_seen": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "power_state": power_state
+                    "power_state": power_state,
+                    "services": services
                 })
             else:
                 nodes.append({
@@ -1081,7 +1774,8 @@ def discover_nodes():
                     "response_time": -1,
                     "self": False,
                     "last_seen": "never",
-                    "power_state": "offline"
+                    "power_state": "offline",
+                    "services": {}
                 })
                 
         except Exception as e:
@@ -1093,7 +1787,8 @@ def discover_nodes():
                 "response_time": -1,
                 "self": False,
                 "last_seen": "never",
-                "power_state": "error"
+                "power_state": "error",
+                "services": {}
             })
     
     return nodes
