@@ -246,8 +246,7 @@ Categories=System;Monitor;Network;
 
 def test_magi_installation():
     """Test if MAGI can be imported and run"""
-    print("
-🧪 Testing MAGI installation...")
+    print("\n🧪 Testing MAGI installation...")
     
     try:
         # Check if magi-node-v2.py exists
