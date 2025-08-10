@@ -133,7 +133,7 @@ def install_macos_service(node_name):
     <key>ProgramArguments</key>
     <array>
         <string>{sys.executable}</string>
-        <string>{current_dir}/magi-node.py</string>
+        <string>{current_dir}/magi-node-v2.py</string>
         <string>{node_name}</string>
     </array>
     <key>WorkingDirectory</key>
@@ -174,7 +174,7 @@ def install_fallback(node_name):
         launcher_content = f"""@echo off
 title 🧙‍♂️ MAGI {node_name}
 cd /d "{current_dir}"
-python magi-node.py {node_name}
+python magi-node-v2.py {node_name}
 pause
 """
     else:
@@ -182,7 +182,7 @@ pause
         launcher_content = f"""#!/bin/bash
 echo "🧙‍♂️ Starting MAGI {node_name}..."
 cd "{current_dir}"
-python3 magi-node.py {node_name}
+python3 magi-node-v2.py {node_name}
 """
     
     launcher_file.write_text(launcher_content)
@@ -244,25 +244,20 @@ Categories=System;Monitor;Network;
     except Exception as e:
         print(f"⚠️  Could not create desktop shortcut: {e}")
 
-def test_installation():
-    """Test if MAGI can start properly"""
-    print("\n🧪 Testing MAGI installation...")
+def test_magi_installation():
+    """Test if MAGI can be imported and run"""
+    print("
+🧪 Testing MAGI installation...")
     
     try:
-        # Quick syntax test
-        result = subprocess.run([sys.executable, '-m', 'py_compile', 'magi-node.py'], 
-                              capture_output=True, text=True, timeout=10)
-        
-        if result.returncode == 0:
-            print("✅ MAGI syntax check passed")
-            return True
-        else:
-            print(f"❌ Syntax error: {result.stderr}")
+        # Check if magi-node-v2.py exists
+        if not os.path.exists('magi-node-v2.py'):
+            print("❌ magi-node-v2.py not found in current directory")
             return False
-    
-    except Exception as e:
-        print(f"❌ Test failed: {e}")
-        return False
+        
+        # Test Python syntax
+        result = subprocess.run([sys.executable, '-m', 'py_compile', 'magi-node-v2.py'], 
+                              capture_output=True, text=True)
 
 def main():
     """Main installation function"""
