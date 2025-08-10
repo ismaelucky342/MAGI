@@ -1,3 +1,49 @@
+### Instalación rápida en Windows
+
+1. Abre PowerShell y navega a la carpeta del repositorio MAGI.
+2. Ejecuta el script automatizado:
+  ```powershell
+  ./install-windows.ps1
+  ```
+3. Cuando termine, inicia la app con:
+  ```powershell
+  cd frontend
+  npm run electron:start
+  ```
+4. ¡Listo! MAGI se abrirá como aplicación de escritorio.
+
+## Desktop App (Electron)
+
+MAGI puede ejecutarse como aplicación de escritorio en Linux y Windows usando Electron.
+
+### Ejecución en modo app (desarrollo)
+
+1. Instala dependencias adicionales:
+  ```bash
+  cd frontend
+  npm install --save-dev electron electron-builder concurrently cross-env wait-on
+  ```
+2. Inicia la app de escritorio:
+  ```bash
+  npm run electron:start
+  ```
+  Esto abrirá la interfaz React en una ventana nativa.
+
+### Empaquetar la app (producción)
+
+1. Construye la app React:
+  ```bash
+  npm run build
+  ```
+2. Empaqueta la app de escritorio:
+  ```bash
+  npx electron-builder
+  ```
+  El instalador estará disponible en la carpeta `dist/`.
+
+### Notas
+- Puedes ejecutar la app en cualquier nodo (Baltasar, Gaspar o Melchor).
+- La app puede convivir con la versión web y acceder a los mismos servicios backend.
 # MAGI - Distributed Node Monitoring System
 
 <div align="center">
@@ -7,77 +53,84 @@
 
 ## Overview
 
+
 MAGI is a distributed monitoring system designed to manage and monitor three specialized nodes:
 
-- **🎬 Gaspar** - Multimedia server (Jellyfin, downloads, media storage)
-- **💾 Melchor** - Backup and mass storage server  
-- **🏠 Baltasar** - Home automation server (Home Assistant, IoT)
+- **🤖 Baltasar** - Main AI & multimedia server (Jellyfin, AI workloads, high performance)
+- **💾 Gaspar** - Backup and mass storage server
+- **🏠 Melchor** - Home Assistant, IoT, and monitoring server
 
 ## Features
 
 - **📊 Real-time Metrics** - CPU, RAM, disk, network, service status
 - **🖥️ Web Terminal** - SSH access to any node via browser
 - **🚨 Smart Alerts** - Visual and audio notifications for failures
-- **🔄 Portable** - Deploy on any of the three nodes
+- **🔄 Portable** - Deploy on any of the three nodes (Linux or Windows)
 - **🔒 Secure** - JWT authentication + SSH key management
 - **📱 Responsive** - Works on desktop, tablet, and mobile
 
-## Quick Start
+
+## Quick Start (Linux & Windows)
 
 ### Prerequisites
 
-- Docker & Docker Compose
-- Node.js 18+ (for development)
+- Docker & Docker Compose (recommended for all platforms)
+- Node.js 18+ (for native development)
 - SSH access to all nodes
 
-### Interactive Setup
-
-1. **Clone the repository:**
+### 1. Clone the repository
 ```bash
 git clone <repository-url>
 cd MAGI
 ```
 
-2. **Launch the interactive menu:**
-```bash
-make menu
-# or
-./scripts/magi-menu.sh
-```
-
-3. **Quick setup with Makefile:**
+### 2. Setup (Linux/macOS)
 ```bash
 make install    # Complete setup
-make dev        # Start development
+make dev        # Start development (frontend+backend)
 make start      # Start with Docker
 make deploy     # Deploy to nodes
 ```
 
-### Manual Setup
+### 2. Setup (Windows)
 
-1. **Install and configure:**
-```bash
-make install
-make setup
-```
+- If using WSL: Use the same Linux commands above.
+- If using native Windows (PowerShell):
+  1. Install Node.js and Docker Desktop for Windows.
+  2. Run:
+     ```powershell
+     npm install
+     cd backend; npm install; cd ..
+     cd frontend; npm install; cd ..
+     # To start backend:
+     cd backend; npm run dev
+     # To start frontend:
+     cd frontend; npm start
+     ```
+  3. Or use Docker Compose:
+     ```powershell
+     docker-compose up --build
+     ```
 
-2. **Configure nodes:**
-```bash
-# Edit with your actual node information
-nano config/nodes.json
-```
+### 3. Configure nodes
+Edit `config/nodes.json` with your actual node information.
 
-3. **Start development:**
-```bash
-make dev
-```
+### 4. Configuration of ports and IP
 
-4. **Or start with Docker:**
-```bash
-make start
-```
+- The backend and frontend ports are configurable in the `.env` file:
+  ```env
+  PORT=5000         # Backend port
+  FRONTEND_PORT=3000 # Frontend port
+  HOST=0.0.0.0      # Listen on all interfaces (for remote access)
+  ```
+- To expose metrics on a specific port/IP, edit `.env` and restart the services.
 
-The interface will be available at `http://localhost:3000`
+### 5. Access the interface
+The web interface will be available at `http://<your-ip>:<FRONTEND_PORT>` (default: `http://localhost:3000`).
+
+### 6. Notes
+- All commands/scripts are compatible with Linux, macOS, and WSL. For native Windows, use PowerShell equivalents or Docker Compose.
+- For production, it is recommended to use Docker for maximum portability.
 
 ## Architecture
 
