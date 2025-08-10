@@ -257,6 +257,17 @@ def test_magi_installation():
         # Test Python syntax
         result = subprocess.run([sys.executable, '-m', 'py_compile', 'magi-node-v2.py'], 
                               capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            print(f"❌ Syntax error: {result.stderr}")
+            return False
+        
+        print("✅ MAGI installation test passed")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error testing MAGI: {e}")
+        return False
 
 def main():
     """Main installation function"""
@@ -267,14 +278,8 @@ def main():
         print("\n❌ Prerequisites not met. Please install Python 3.6+ and try again.")
         return False
     
-    # Check if magi-node.py exists
-    if not os.path.exists('magi-node.py'):
-        print("❌ magi-node.py not found in current directory")
-        print("Please run this installer from the MAGI directory")
-        return False
-    
     # Test installation
-    if not test_installation():
+    if not test_magi_installation():
         print("❌ MAGI installation test failed")
         return False
     
