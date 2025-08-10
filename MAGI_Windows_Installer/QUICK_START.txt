@@ -1,0 +1,16 @@
+🧙 MAGI Node Quick Start Guide
+
+1. INSTALL:
+   - Double-click "install_magi_windows.bat"
+   - OR double-click "MAGI_Portable.bat" for portable mode
+
+2. RUN:
+   - Desktop shortcut: "MAGI Node"
+   - OR Start Menu > MAGI > MAGI Node
+
+3. ACCESS:
+   - Open browser: http://localhost:8080
+
+That's it! 🎉
+
+Problems? Check README.txt
