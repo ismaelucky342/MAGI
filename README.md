@@ -1,4 +1,6 @@
 # MAGI - Distributed Infrastructure Monitoring System
+<img width="879" height="349" alt="image" src="https://github.com/user-attachments/assets/e8931265-f75d-458f-8076-8cb71392010b" />
+
 
 A distributed monitoring system designed for managing and monitoring multiple nodes in local network infrastructures. MAGI provides real-time system metrics, service discovery, and remote management capabilities across networked devices.
 
