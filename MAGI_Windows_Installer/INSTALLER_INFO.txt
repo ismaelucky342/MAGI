@@ -1,0 +1,104 @@
+🧙 MAGI Windows Installer Package v2.1
+====================================================
+
+## 📦 Package Contents
+
+### Installation Files:
+- `install_magi.py` - **MAIN INSTALLER** (Python GUI - RECOMMENDED)
+- `magi_windows_python_installer.py` - Full Python installer with GUI
+- `install_magi_windows.bat` - Batch installer (classic method)
+- `MAGI_Portable.bat` - Portable mode (no installation required)
+
+### Application Files:
+- `magi-node-v2.py` - Main MAGI application
+- `magi_launcher.py` - Auto-launcher with GUI
+- `power-save-mode.py` - Power management module
+- `images/` - MAGI assets and icons
+
+### Documentation:
+- `README.txt` - Complete installation guide
+- `QUICK_START.txt` - Super quick start guide
+- `INSTALLER_INFO.txt` - This file
+
+## 🚀 Installation Instructions
+
+### For End Users (Windows):
+1. Extract this package to any folder
+2. **Double-click `install_magi.py`** (easiest method)
+3. Follow the GUI installer
+4. Choose installation directory
+5. Click "Install MAGI Node"
+6. Done! Access at http://localhost:8080
+
+### Alternative Methods:
+- **Portable**: Double-click `MAGI_Portable.bat`
+- **Batch**: Double-click `install_magi_windows.bat`
+- **Manual**: Run `python install_magi.py` from command line
+
+## 🔧 What the Installer Does
+
+1. **System Check**: Verifies Python 3.8+ and pip
+2. **Dependency Install**: Automatically installs psutil
+3. **File Copy**: Copies MAGI files to installation directory
+4. **Launcher Creation**: Creates smart launcher with GUI
+5. **Shortcuts**: Desktop and Start Menu shortcuts (optional)
+6. **Uninstaller**: Creates clean uninstaller
+
+## 💡 Key Features
+
+### Auto-Detection:
+- Node name (GASPAR/MELCHIOR/BALTASAR) based on hostname/IP
+- Available port (starts from 8080)
+- Local IP address
+
+### GUI Launcher:
+- Easy configuration interface
+- Real-time status monitoring
+- Start/stop controls
+- Error reporting
+
+### Cross-Compatible:
+- Works with or without GUI
+- Falls back to console mode if needed
+- Handles missing dependencies gracefully
+
+## 🎯 User Experience
+
+### Super Simple:
+1. Double-click installer
+2. Click "Install"
+3. Click "Start MAGI"
+4. Access dashboard at http://localhost:8080
+
+### Professional:
+- Clean installation process
+- Proper Windows integration
+- Easy uninstallation
+- Professional shortcuts and icons
+
+## 📋 System Requirements
+
+- Windows 10/11
+- Python 3.8 or higher
+- Internet connection (for initial pip install)
+- ~50MB disk space
+
+## 🔄 Version History
+
+- v2.1: Added Python GUI installer with auto-detection
+- v2.0: Initial Windows installer package
+- Focus on user-friendly installation
+- Professional Windows integration
+
+## 🎉 Ready for Distribution
+
+This package is ready to be distributed to end users. They simply need to:
+1. Download and extract
+2. Double-click `install_magi.py`
+3. Follow the installer
+
+No technical knowledge required!
+
+====================================================
+Created: 2025-08-10
+Package: MAGI_Windows_Installer_v2.1.tar.gz
