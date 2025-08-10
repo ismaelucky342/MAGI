@@ -1,15 +1,23 @@
-🧙 MAGI Node - SUPER QUICK START
+🧙 MAGI Node - QUICK START WINDOWS
 
-🎯 EASIEST WAY:
-   1. Double-click "install_magi.py"
-   2. Click "Install MAGI Node" 
-   3. Done! 🎉
+⚡ MÉTODO MÁS FÁCIL (recomendado):
+   1. Doble-click "install_magi_simple.py"
+   2. Seguir las instrucciones en pantalla
+   3. ¡Listo! 🎉
 
-🌐 ACCESS:
-   - Open browser: http://localhost:8080
+🔧 Si el anterior no funciona:
+   - Doble-click "install_magi.py" (versión con GUI)
+   - O "install_magi_windows.bat" (versión clásica)
 
-🖥️ ALTERNATIVE METHODS:
-   - Batch: "install_magi_windows.bat"
-   - Portable: "MAGI_Portable.bat"
+🎯 Sin instalación:
+   - Doble-click "MAGI_Portable.bat"
 
-That's it! Problems? Check README.txt
+🌐 ACCESO:
+   - http://localhost:8080
+
+� PROBLEMAS COMUNES:
+   - Ventana se cierra: Instala Python desde python.org
+   - No funciona: Ejecuta como Administrador
+   - Prueba el modo portable si todo falla
+
+That's it! 🚀

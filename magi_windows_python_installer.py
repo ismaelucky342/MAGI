@@ -658,49 +658,93 @@ class MAGIInstallerGUI:
         self.root.mainloop()
 
 def main():
-    """Main function"""
-    print("MAGI Windows Python Installer v" + MAGI_VERSION)
-    print("=" * 50)
-    
-    # Check if we're running in a GUI environment
+    """Main function with error handling"""
     try:
-        app = MAGIInstallerGUI()
-        app.run()
+        print("MAGI Windows Python Installer v" + MAGI_VERSION)
+        print("=" * 50)
+        
+        # Check if we're running in a GUI environment
+        try:
+            # Try to create the GUI
+            app = MAGIInstallerGUI()
+            app.run()
+            
+        except Exception as gui_error:
+            print(f"GUI not available: {gui_error}")
+            print("Falling back to console mode...")
+            
+            # Console installation
+            installer = MAGIWindowsInstaller()
+            
+            print("\\nSystem Check:")
+            python_ok, python_info = installer.check_python_installation()
+            print(f"Python: {python_info}")
+            
+            pip_ok = installer.check_pip_installation()
+            print(f"pip: {'Available' if pip_ok else 'Not found'}")
+            
+            if not python_ok or not pip_ok:
+                print("\\n❌ System requirements not met.")
+                print("Please install Python 3.8+ with pip from: https://www.python.org/downloads/")
+                print("\\n💡 Tips:")
+                print("- Download Python from python.org")
+                print("- During installation, check 'Add Python to PATH'")
+                print("- Restart computer after installation")
+                input("\\nPress Enter to exit...")
+                return
+            
+            print(f"\\nInstalling MAGI to: {installer.install_dir}")
+            
+            # Ask for confirmation
+            response = input("\\nProceed with installation? (y/N): ")
+            if response.lower() not in ['y', 'yes']:
+                print("Installation cancelled.")
+                input("Press Enter to exit...")
+                return
+            
+            def console_progress(status, value):
+                print(f"[{value:3d}%] {status}")
+            
+            print("\\nStarting installation...")
+            success = installer.perform_installation(console_progress)
+            
+            if success:
+                print("\\n✅ Installation completed successfully!")
+                print(f"\\n🚀 To start MAGI Node:")
+                print(f"1. Open Command Prompt")
+                print(f"2. cd \"{installer.install_dir}\"")
+                print(f"3. python magi_launcher.py")
+                print(f"\\n🌐 Then access: http://localhost:8080")
+                
+                # Ask if user wants to start now
+                start_now = input("\\nStart MAGI Node now? (y/N): ")
+                if start_now.lower() in ['y', 'yes']:
+                    try:
+                        import os
+                        launcher_path = os.path.join(installer.install_dir, 'magi_launcher.py')
+                        os.chdir(installer.install_dir)
+                        print(f"\\nStarting MAGI from: {installer.install_dir}")
+                        print("Press Ctrl+C to stop MAGI...")
+                        exec(open(launcher_path).read())
+                    except KeyboardInterrupt:
+                        print("\\n🛑 MAGI stopped by user")
+                    except Exception as e:
+                        print(f"❌ Error starting MAGI: {e}")
+            else:
+                print("\\n❌ Installation failed.")
+                print("Please check the error messages above.")
+            
     except Exception as e:
-        print(f"GUI not available, falling back to console mode: {e}")
-        
-        # Console installation
-        installer = MAGIWindowsInstaller()
-        
-        print("\\nSystem Check:")
-        python_ok, python_info = installer.check_python_installation()
-        print(f"Python: {python_info}")
-        
-        pip_ok = installer.check_pip_installation()
-        print(f"pip: {'Available' if pip_ok else 'Not found'}")
-        
-        if not python_ok or not pip_ok:
-            print("\\n❌ System requirements not met. Please install Python 3.8+ with pip.")
-            input("Press Enter to exit...")
-            return
-        
-        print(f"\\nInstalling MAGI to: {installer.install_dir}")
-        
-        def console_progress(status, value):
-            print(f"[{value:3d}%] {status}")
-        
-        success = installer.perform_installation(console_progress)
-        
-        if success:
-            print("\\n✅ Installation completed successfully!")
-            print(f"\\nTo start MAGI Node:")
-            print(f"1. Open Command Prompt")
-            print(f"2. cd \"{installer.install_dir}\"")
-            print(f"3. python magi_launcher.py")
-        else:
-            print("\\n❌ Installation failed.")
-        
-        input("\\nPress Enter to exit...")
+        print(f"\\n❌ Unexpected error: {e}")
+        print("\\n🔧 Troubleshooting:")
+        print("1. Make sure Python 3.8+ is installed")
+        print("2. Run as Administrator if needed")
+        print("3. Check internet connection")
+        print("4. Try the portable version instead")
+    
+    finally:
+        # Always pause before exit
+        input("\\n\\nPress Enter to exit...")
 
 if __name__ == "__main__":
     main()
