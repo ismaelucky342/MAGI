@@ -34,8 +34,9 @@ MAGI operates as a distributed monitoring solution where each node runs independ
 
 - **Node Agent**: Main monitoring service (`magi-node-v2.py`)
 - **Power Management**: Energy state control (`power-save-mode.py`)
-- **Service Installer**: Automated deployment (`install-magi-service.py`)
-- **Web Interface**: Real-time dashboard with REST API
+- **Universal Installer**: Unified deployment system (`magi-installer.py`)
+- **Quick Installer**: Simple setup for development (`magi-quick-install.py`)
+- **Web Interface**: Secure dashboard with authentication and REST API
 
 ## Features
 
@@ -43,8 +44,10 @@ MAGI operates as a distributed monitoring solution where each node runs independ
 - **Service Discovery**: Automatic detection of running services (Nextcloud, Jellyfin, Docker, SSH, etc.)
 - **Multi-node Communication**: Cross-node metrics aggregation and status reporting
 - **Power Management**: Remote shutdown, reboot, and performance mode control
-- **REST API**: Comprehensive API for system integration
-- **Web Dashboard**: Modern web interface for centralized management
+- **Security**: Web authentication, API keys, session management
+- **Unified Configuration**: Single admin account across all nodes
+- **REST API**: Comprehensive secured API for system integration
+- **Web Dashboard**: Modern authenticated web interface for centralized management
 
 ## Node Specifications
 
@@ -69,19 +72,34 @@ MAGI operates as a distributed monitoring solution where each node runs independ
 
 ## Quick Installation
 
-### Automatic Service Installation
+### 🚀 Universal Installer (Recommended)
 ```bash
-wget https://raw.githubusercontent.com/ismaelucky342/MAGI/main/install-magi-service.py
-chmod +x install-magi-service.py
-sudo python3 install-magi-service.py
+# Download unified installer
+wget https://raw.githubusercontent.com/ismaelucky342/MAGI/main/magi-installer.py
+chmod +x magi-installer.py
+
+# Simple installation (development/testing)
+python3 magi-installer.py
+
+# Production installation (systemd service)
+sudo python3 magi-installer.py
 ```
 
-### Manual Installation
+### 🔧 Quick Development Setup
 ```bash
+# Clone repository
 git clone https://github.com/ismaelucky342/MAGI.git
 cd MAGI
-sudo python3 install-magi-service.py
+
+# Quick setup without systemd
+python3 magi-quick-install.py
+
+# Or full installation with security
+python3 magi-installer.py
 ```
+
+### 📖 Installation Guide
+For detailed installation options and configuration, see: [**INSTALLATION_GUIDE.md**](INSTALLATION_GUIDE.md)
 
 ## Deployment
 
@@ -141,22 +159,25 @@ python3 magi-node-v2.py <NODE_NAME>
 | `/api/nodes` | GET | List of discovered MAGI nodes |
 
 ### Authentication
-Currently operates without authentication for local network use. Consider implementing authentication for production deployments.
+✅ **Security implemented**: Web authentication with login/logout, API key protection, and session management.
+
+**Default credentials are generated during installation and displayed upon completion.**
 
 ## Infrastructure Deployment
 
 ### Single Node Setup
 ```bash
 # Install on single machine
-sudo python3 install-magi-service.py
-# Access via http://localhost:8080
+python3 magi-installer.py
+# Access via http://localhost:<assigned_port>
+# Use credentials provided during installation
 ```
 
 ### Multi-Node Setup
 ```bash
 # Install on each machine in network
 for host in node1 node2 node3; do
-    ssh $host "wget https://raw.githubusercontent.com/ismaelucky342/MAGI/main/install-magi-service.py && sudo python3 install-magi-service.py"
+    ssh $host "wget https://raw.githubusercontent.com/ismaelucky342/MAGI/main/magi-installer.py && python3 magi-installer.py"
 done
 ```
 

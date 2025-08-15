@@ -1,0 +1,14 @@
+[Unit]
+Description=MAGI GASPAR Node
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/magi
+Environment=MAGI_API_KEY=change_this_to_a_strong_key
+ExecStart=/usr/bin/python3 /opt/magi/magi-node-gaspar.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

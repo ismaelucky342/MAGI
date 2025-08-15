@@ -16,11 +16,25 @@ import threading
 import socket
 import time
 import psutil
+import hashlib
+import secrets
+import base64
+from http.cookies import SimpleCookie
 
 # Configuration
 CONFIG = {
     "node_name": "UNKNOWN",
     "port": 8080,
+    "bind_address": "0.0.0.0",
+    # If require_api_key is true, clients must present Authorization: Bearer <API_KEY>
+    "require_api_key": False,
+    "api_key": "changeme",
+    # Web UI authentication
+    "require_login": True,
+    "login_users": {
+        "admin": "changeme"  # Will be set during installation
+    },
+    "session_timeout": 3600,  # 1 hour
     "other_nodes": [
         {"name": "GASPAR", "ip": "127.0.0.1", "port": 8080},
         {"name": "MELCHIOR", "ip": "127.0.0.1", "port": 8081},
@@ -28,15 +42,57 @@ CONFIG = {
     ]
 }
 
+# Session management
+ACTIVE_SESSIONS = {}
+SESSION_CLEANUP_INTERVAL = 300  # 5 minutes
+
+def cleanup_expired_sessions():
+    """Clean up expired sessions"""
+    current_time = time.time()
+    timeout = CONFIG.get('session_timeout', 3600)
+    
+    expired_sessions = []
+    for session_id, session in ACTIVE_SESSIONS.items():
+        if current_time - session['last_access'] > timeout:
+            expired_sessions.append(session_id)
+    
+    for session_id in expired_sessions:
+        del ACTIVE_SESSIONS[session_id]
+    
+    if expired_sessions:
+        print(f"Cleaned up {len(expired_sessions)} expired sessions")
+
+def start_session_cleanup():
+    """Start background session cleanup"""
+    cleanup_expired_sessions()
+    threading.Timer(SESSION_CLEANUP_INTERVAL, start_session_cleanup).start()
+
 class MAGIHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         """Handle HTTP GET requests"""
+        # Check web UI authentication for main page
+        if self.path == "/" or self.path.startswith('/dashboard'):
+            if CONFIG.get('require_login') and not self.check_session():
+                self.serve_login_page()
+                return
+                
+        # Enforce API auth for /api/ endpoints if enabled
+        if CONFIG.get('require_api_key') and self.path.startswith('/api'):
+            if not self.check_api_auth():
+                return
+                
         if self.path == "/":
             self.serve_main_page()
+        elif self.path == "/login":
+            self.serve_login_page()
+        elif self.path == "/logout":
+            self.handle_logout()
         elif self.path == "/api/metrics":
             self.serve_metrics()
         elif self.path == "/api/all-metrics":
             self.serve_all_metrics()
+        elif self.path == "/api/stream":
+            self.serve_stream()
         elif self.path == "/api/nodes":
             self.serve_nodes()
         elif self.path == "/api/services":
@@ -50,6 +106,20 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
     
     def do_POST(self):
         """Handle HTTP POST requests for system control"""
+        # Handle login requests
+        if self.path == '/login':
+            self.handle_login()
+            return
+            
+        # Check web UI authentication for control endpoints
+        if CONFIG.get('require_login') and not self.check_session():
+            self.send_error(401, "Login required")
+            return
+            
+        # Enforce API auth for POST endpoints if enabled
+        if CONFIG.get('require_api_key') and self.path.startswith('/api'):
+            if not self.check_api_auth():
+                return
         content_length = int(self.headers.get('Content-Length', 0))
         post_data = self.rfile.read(content_length)
         
@@ -83,6 +153,289 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
         
         else:
             self.send_error(404, "Not Found")
+
+    def check_api_auth(self):
+        """Validate Authorization header when API key enforcement is enabled."""
+        auth = self.headers.get('Authorization') or self.headers.get('authorization')
+        if not auth:
+            self.send_error(401, "Unauthorized: missing Authorization header")
+            return False
+
+        # Expect header 'Authorization: Bearer <key>'
+        parts = auth.split()
+        if len(parts) != 2 or parts[0].lower() != 'bearer':
+            self.send_error(401, "Unauthorized: invalid Authorization format")
+            return False
+
+        token = parts[1]
+        if token != CONFIG.get('api_key'):
+            self.send_error(403, "Forbidden: invalid API key")
+            return False
+
+        return True
+    
+    def check_session(self):
+        """Check if user has valid session"""
+        if not CONFIG.get('require_login'):
+            return True
+            
+        cookies = SimpleCookie(self.headers.get('Cookie', ''))
+        session_id = cookies.get('magi_session')
+        
+        if not session_id:
+            return False
+            
+        session_id = session_id.value
+        session = ACTIVE_SESSIONS.get(session_id)
+        
+        if not session:
+            return False
+            
+        # Check session timeout
+        if time.time() - session['created'] > CONFIG.get('session_timeout', 3600):
+            del ACTIVE_SESSIONS[session_id]
+            return False
+            
+        # Update last access
+        session['last_access'] = time.time()
+        return True
+    
+    def create_session(self, username):
+        """Create new session for user"""
+        session_id = secrets.token_hex(32)
+        ACTIVE_SESSIONS[session_id] = {
+            'username': username,
+            'created': time.time(),
+            'last_access': time.time()
+        }
+        return session_id
+    
+    def handle_login(self):
+        """Handle login form submission"""
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            
+            # Parse form data
+            form_data = urllib.parse.parse_qs(post_data.decode('utf-8'))
+            username = form_data.get('username', [''])[0]
+            password = form_data.get('password', [''])[0]
+            
+            # Validate credentials
+            users = CONFIG.get('login_users', {})
+            if username in users and users[username] == password:
+                # Create session
+                session_id = self.create_session(username)
+                
+                # Redirect to dashboard with session cookie
+                self.send_response(302)
+                self.send_header('Location', '/')
+                self.send_header('Set-Cookie', f'magi_session={session_id}; Path=/; HttpOnly; SameSite=Strict')
+                self.end_headers()
+            else:
+                # Invalid credentials - show login page with error
+                self.serve_login_page(error="Invalid username or password")
+        except Exception as e:
+            print(f"Login error: {e}")
+            self.send_error(500, "Login error")
+    
+    def handle_logout(self):
+        """Handle logout request"""
+        cookies = SimpleCookie(self.headers.get('Cookie', ''))
+        session_id = cookies.get('magi_session')
+        
+        if session_id:
+            session_id = session_id.value
+            if session_id in ACTIVE_SESSIONS:
+                del ACTIVE_SESSIONS[session_id]
+        
+        # Redirect to login with expired cookie
+        self.send_response(302)
+        self.send_header('Location', '/login')
+        self.send_header('Set-Cookie', 'magi_session=; Path=/; HttpOnly; SameSite=Strict; Expires=Thu, 01 Jan 1970 00:00:00 GMT')
+        self.end_headers()
+    
+    def serve_login_page(self, error=None):
+        """Serve the login page"""
+        error_html = f'<div class="error-message">{error}</div>' if error else ''
+        
+        html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>MAGI Login - {CONFIG['node_name']}</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        {self.get_login_css()}
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-box">
+            <div class="logo-section">
+                <img src="/images/MAGI.png" alt="MAGI" class="login-logo" onerror="this.style.display='none'">
+                <h1>MAGI LOGIN</h1>
+                <p>Node: {CONFIG['node_name']}</p>
+            </div>
+            {error_html}
+            <form method="POST" action="/login" class="login-form">
+                <div class="input-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" name="username" required autocomplete="username">
+                </div>
+                <div class="input-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="login-btn">ACCESS SYSTEM</button>
+            </form>
+            <div class="footer">
+                <p>🔒 Secure Access Required</p>
+                <p>MAGI v2.0 - Enhanced Distributed Monitoring</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>"""
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(html.encode('utf-8'))
+    
+    def get_login_css(self):
+        """CSS for login page"""
+        return """
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #ff3333;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        .login-container {
+            width: 100%;
+            max-width: 400px;
+            padding: 20px;
+        }
+        
+        .login-box {
+            background: rgba(255, 51, 51, 0.1);
+            border: 2px solid #ff3333;
+            border-radius: 8px;
+            padding: 40px 30px;
+            box-shadow: 0 0 30px rgba(255, 51, 51, 0.5);
+            text-align: center;
+        }
+        
+        .logo-section {
+            margin-bottom: 30px;
+        }
+        
+        .login-logo {
+            height: 60px;
+            margin-bottom: 15px;
+            filter: drop-shadow(0 0 15px rgba(255, 51, 51, 0.8));
+        }
+        
+        .logo-section h1 {
+            font-size: 28px;
+            font-weight: bold;
+            text-shadow: 0 0 20px #ff3333;
+            margin-bottom: 10px;
+        }
+        
+        .logo-section p {
+            font-size: 14px;
+            opacity: 0.8;
+            color: #00ff00;
+        }
+        
+        .error-message {
+            background: rgba(255, 0, 0, 0.2);
+            border: 1px solid #ff0000;
+            color: #ff0000;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .login-form {
+            text-align: left;
+        }
+        
+        .input-group {
+            margin-bottom: 20px;
+        }
+        
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #ff3333;
+        }
+        
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #ff3333;
+            border-radius: 4px;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        
+        .input-group input:focus {
+            outline: none;
+            border-color: #00ff00;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+        }
+        
+        .login-btn {
+            width: 100%;
+            padding: 15px;
+            background: rgba(255, 51, 51, 0.2);
+            border: 2px solid #ff3333;
+            border-radius: 4px;
+            color: #ff3333;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .login-btn:hover {
+            background: rgba(255, 51, 51, 0.3);
+            color: #fff;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 51, 51, 0.4);
+        }
+        
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 51, 51, 0.3);
+        }
+        
+        .footer p {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-bottom: 5px;
+        }
+        """
     
     def serve_main_page(self):
         """Serve the main MAGI dashboard"""
@@ -94,105 +447,39 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
     
     def serve_metrics(self):
         """Serve system metrics as JSON"""
-        metrics = get_system_metrics()
-        self.send_json(metrics)
-        
-    def serve_all_metrics(self):
-        """Serve metrics from all nodes"""
         try:
-            all_metrics = {}
-            
-            # Add current node metrics
-            local_metrics = get_system_metrics()
-            all_metrics[CONFIG['node_name']] = {
-                "status": "online",
-                "metrics": local_metrics,
-                "ip": "localhost",
-                "port": CONFIG['port']
-            }
-            
-            # Check if we're in demo mode (simulate other nodes)
-            demo_mode = os.environ.get('MAGI_DEMO_MODE', 'false').lower() == 'true'
-            
-            if demo_mode:
-                # Simulate other nodes for demonstration
-                all_nodes = ['GASPAR', 'MELCHIOR', 'BALTASAR']
-                for node_name in all_nodes:
-                    if node_name != CONFIG['node_name']:
-                        # Create simulated metrics
-                        sim_metrics = self.create_simulated_metrics(node_name)
-                        all_metrics[node_name] = {
-                            "status": "online",
-                            "metrics": sim_metrics,
-                            "ip": f"192.168.1.{10 + len(node_name)}",  # Simulated IP
-                            "port": 8080 + len(node_name)  # Simulated port
-                        }
-            else:
-                # Real node discovery
-                nodes = discover_nodes()
-                for node in nodes:
-                    if node['name'] == CONFIG['node_name']:
-                        continue  # Skip self
-                        
-                    node_name = node["name"]
-                    node_ip = node["ip"]
-                    
-                    # First check if it's a known MAGI node name
-                    if node_name not in ['GASPAR', 'MELCHIOR', 'BALTASAR']:
-                        continue
-                    
-                    # Try common MAGI ports
-                    ports_to_try = [8080, 8081, 8082, 8083, 8084, 8085]
-                    node_found = False
-                    
-                    for port in ports_to_try:
-                        try:
-                            # First check if port is open
-                            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                            sock.settimeout(1)
-                            result = sock.connect_ex((node_ip, port))
-                            sock.close()
-                            
-                            if result != 0:  # Port not open
-                                continue
-                                
-                            # Port is open, try to get MAGI metrics
-                            url = f"http://{node_ip}:{port}/api/metrics"
-                            request = urllib.request.Request(url)
-                            request.add_header('User-Agent', 'MAGI-Node/2.0')
-                            
-                            with urllib.request.urlopen(request, timeout=3) as response:
-                                node_metrics = json.loads(response.read().decode())
-                                all_metrics[node_name] = {
-                                    "status": "online",
-                                    "metrics": node_metrics,
-                                    "ip": node_ip,
-                                    "port": port
-                                }
-                                node_found = True
-                                break  # Success, exit port loop
-                        except Exception as e:
-                            continue  # Try next port
-                    
-                    # If no MAGI service found, don't add to metrics (will show as not detected)
-                    if not node_found:
-                        # Only add if we're sure it should be a MAGI node
-                        all_metrics[node_name] = {
-                            "status": "offline", 
-                            "error": f"MAGI service not running on {node_ip}",
-                            "ip": node_ip,
-                            "port": "unknown"
-                        }
-            
+            metrics = get_system_metrics()
+        except Exception:
+            metrics = get_system_metrics_fallback()
+        self.send_json(metrics)
+    
+    def serve_all_metrics(self):
+        """Serve aggregated metrics from all nodes as JSON"""
+        try:
+            all_metrics = gather_all_metrics()
             self.send_json(all_metrics)
-        except BrokenPipeError:
-            # Client disconnected, ignore
-            pass
         except Exception as e:
-            try:
-                self.send_error(500, f"Error getting all metrics: {e}")
-            except BrokenPipeError:
-                pass
+            self.send_error(500, f"Error gathering all metrics: {e}")
+    
+    def serve_stream(self):
+        """Serve Server-Sent Events stream for real-time metrics"""
+        try:
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/event-stream')
+            self.send_header('Cache-Control', 'no-cache')
+            self.send_header('Connection', 'keep-alive')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            # Send initial data
+            all_metrics = gather_all_metrics()
+            data = json.dumps(all_metrics)
+            self.wfile.write(f"data: {data}\n\n".encode('utf-8'))
+            self.wfile.flush()
+            
+        except Exception as e:
+            print(f"SSE stream error: {e}")
+            self.send_error(500, f"Stream error: {e}")
     
     def create_simulated_metrics(self, node_name):
         """Create simulated metrics for demo purposes"""
@@ -385,6 +672,7 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
             <div class="status-indicator">
                 <div class="system-status online">OPERATIONAL</div>
                 <div class="timestamp" id="timestamp"></div>
+                <button class="logout-btn" onclick="logout()">🔓 LOGOUT</button>
             </div>
         </header>
         
@@ -538,6 +826,25 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
         
         .status-indicator {
             text-align: right;
+        }
+        
+        .logout-btn {
+            background: rgba(255, 51, 51, 0.2);
+            border: 1px solid #ff3333;
+            color: #ff3333;
+            padding: 5px 10px;
+            margin-top: 5px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            border-radius: 3px;
+            transition: all 0.3s ease;
+        }
+        
+        .logout-btn:hover {
+            background: rgba(255, 51, 51, 0.4);
+            color: #fff;
+            transform: translateY(-1px);
         }
         
         .system-status.online {
@@ -1224,13 +1531,17 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
         
         async function fetchMetrics() {
             try {
-                const response = await fetch('/api/all-metrics');
-                const allMetrics = await response.json();
-                
-                updateAllMetrics(allMetrics);
-                
-            } catch (error) {
-                console.error('Error fetching metrics:', error);
+                # Use ThreadingTCPServer so SSE and multiple requests won't block each other
+                bind = CONFIG.get('bind_address', '') or ''
+                with socketserver.ThreadingTCPServer((bind, CONFIG["port"]), MAGIHandler) as httpd:
+                    print(f"🚀 MAGI {CONFIG['node_name']} server started (threaded)")
+                    print(f"📡 Access dashboard: http://{bind or 'localhost'}:{CONFIG['port']}")
+                    print(f"🌐 Network access: http://[your-ip]:{CONFIG['port']}")
+                    if CONFIG.get('require_api_key'):
+                        print("🔒 API key enforcement enabled. Use Authorization: Bearer <API_KEY>")
+                    print("Press Ctrl+C to stop")
+                    print("=" * 50)
+                    httpd.serve_forever()
                 addTerminalLog('❌ Error fetching system metrics');
             }
         }
@@ -1262,21 +1573,21 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
                             <div class="node-metric-item">
                                 <div class="node-metric-label">CPU</div>
                                 <div class="node-metric-value">${metrics.cpu || '--'}%</div>
-                                <div class="node-metric-bar">
+                                <div class="node-metric-bar>
                                     <div class="node-metric-fill" style="width: ${metrics.cpu || 0}%"></div>
                                 </div>
                             </div>
                             <div class="node-metric-item">
                                 <div class="node-metric-label">RAM</div>
                                 <div class="node-metric-value">${metrics.memory?.percentage || '--'}%</div>
-                                <div class="node-metric-bar">
+                                <div class="node-metric-bar>
                                     <div class="node-metric-fill" style="width: ${metrics.memory?.percentage || 0}%"></div>
                                 </div>
                             </div>
                             <div class="node-metric-item">
                                 <div class="node-metric-label">DISK</div>
                                 <div class="node-metric-value">${metrics.disk?.percentage || '--'}%</div>
-                                <div class="node-metric-bar">
+                                <div class="node-metric-bar>
                                     <div class="node-metric-fill" style="width: ${metrics.disk?.percentage || 0}%"></div>
                                 </div>
                             </div>
@@ -1629,24 +1940,51 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
             sshEl.textContent = 'Port 22';
             sshEl.style.color = '#ffff00';
         }
-        
         function startMonitoring() {
             updateTimestamp();
             checkNetworkInfo();
-            
-            // Initial fetch
-            fetchMetrics();
+
+            // Try Server-Sent Events first
+            if (window.EventSource) {
+                try {
+                    const es = new EventSource('/api/stream');
+                    es.onmessage = function(e) {
+                        try {
+                            const data = JSON.parse(e.data);
+                            updateAllMetrics(data);
+                        } catch (err) {
+                            console.error('SSE parse error', err);
+                        }
+                    };
+                    es.onerror = function(ev) {
+                        addTerminalLog('⚠️ SSE connection error, falling back to polling');
+                        try { es.close(); } catch (e) {}
+                        // fallback to polling
+                        fetchMetrics();
+                        metricsInterval = setInterval(fetchMetrics, 5000);
+                    };
+
+                    addTerminalLog('📡 Connected to SSE stream for real-time metrics');
+                } catch (e) {
+                    addTerminalLog('⚠️ SSE not available, using polling');
+                    fetchMetrics();
+                    metricsInterval = setInterval(fetchMetrics, 5000);
+                }
+            } else {
+                // No EventSource support
+                fetchMetrics();
+                metricsInterval = setInterval(fetchMetrics, 5000);
+            }
+
+            // Always keep nodes and services updated
             fetchNodes();
             fetchAllServices();
-            
-            // Set up intervals
-            metricsInterval = setInterval(fetchMetrics, 5000);
             nodesInterval = setInterval(fetchNodes, 6000);
-            setInterval(fetchAllServices, 8000); // Servicios cada 8 segundos
-            
+            servicesInterval = setInterval(fetchAllServices, 8000);
+
             // Update timestamp every second
             setInterval(updateTimestamp, 1000);
-            
+
             // Add startup logs
             setTimeout(() => addTerminalLog('⚡ Dashboard initialized'), 500);
             setTimeout(() => addTerminalLog('📡 Real-time monitoring active'), 1000);
@@ -1654,6 +1992,12 @@ class MAGIHandler(http.server.SimpleHTTPRequestHandler):
             setTimeout(() => addTerminalLog('⚙️ Enhanced service detection active'), 2000);
         }
         
+        function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                window.location.href = '/logout';
+            }
+        }
+
         // Start monitoring when page loads
         document.addEventListener('DOMContentLoaded', startMonitoring);
         """
@@ -1858,316 +2202,395 @@ def get_system_metrics():
 def detect_services():
     """Detect comprehensive services running on the system"""
     services = {}
-    
-    # Servicios comunes con sus puertos y procesos
+
+    # Common services with typical process names and ports
     service_definitions = {
-        "nextcloud": {
-            "processes": ["nginx", "apache2", "nextcloud", "php-fpm"],
-            "ports": [80, 443, 8080],
-            "description": "Cloud Storage"
-        },
-        "jellyfin": {
-            "processes": ["jellyfin"],
-            "ports": [8096, 8920],
-            "description": "Media Server"
-        },
-        "plex": {
-            "processes": ["plexmediaserver", "plex"],
-            "ports": [32400],
-            "description": "Media Server"
-        },
-        "emby": {
-            "processes": ["emby", "embyserver"],
-            "ports": [8096],
-            "description": "Media Server"
-        },
-        "docker": {
-            "processes": ["docker", "dockerd", "containerd"],
-            "ports": [2375, 2376],
-            "description": "Container Platform"
-        },
-        "ssh": {
-            "processes": ["sshd", "ssh"],
-            "ports": [22],
-            "description": "Remote Access"
-        },
-        "web": {
-            "processes": ["nginx", "apache2", "httpd", "lighttpd"],
-            "ports": [80, 443, 8080, 8443],
-            "description": "Web Server"
-        },
-        "database": {
-            "processes": ["mysql", "mysqld", "postgresql", "postgres", "mariadb"],
-            "ports": [3306, 5432],
-            "description": "Database"
-        },
-        "samba": {
-            "processes": ["smbd", "nmbd"],
-            "ports": [139, 445],
-            "description": "File Sharing"
-        },
-        "transmission": {
-            "processes": ["transmission-daemon", "transmission"],
-            "ports": [9091],
-            "description": "Torrent Client"
-        },
-        "pihole": {
-            "processes": ["pihole", "dnsmasq", "lighttpd"],
-            "ports": [53, 80],
-            "description": "DNS Filter"
-        },
-        "homeassistant": {
-            "processes": ["homeassistant", "hass"],
-            "ports": [8123],
-            "description": "Home Automation"
-        },
-        "mqtt": {
-            "processes": ["mosquitto", "mqtt"],
-            "ports": [1883, 8883],
-            "description": "IoT Messaging"
-        },
-        "vnc": {
-            "processes": ["vncserver", "vnc", "x11vnc"],
-            "ports": [5900, 5901],
-            "description": "Remote Desktop"
-        },
-        "magi": {
-            "processes": ["magi-node", "python3"],
-            "ports": [8080, 8081, 8082],
-            "description": "MAGI Monitor"
-        }
+        "nextcloud": {"processes": ["nginx", "apache2", "nextcloud", "php-fpm"], "ports": [80, 443, 8080], "description": "Cloud Storage"},
+        "jellyfin": {"processes": ["jellyfin"], "ports": [8096, 8920], "description": "Media Server"},
+        "plex": {"processes": ["plexmediaserver", "plex"], "ports": [32400], "description": "Media Server"},
+        "emby": {"processes": ["emby", "embyserver"], "ports": [8096], "description": "Media Server"},
+        "docker": {"processes": ["docker", "dockerd", "containerd"], "ports": [2375, 2376], "description": "Container Platform"},
+        "ssh": {"processes": ["sshd", "ssh"], "ports": [22], "description": "Remote Access"},
+        "web": {"processes": ["nginx", "apache2", "httpd", "lighttpd"], "ports": [80, 443, 8080, 8443], "description": "Web Server"},
+        "database": {"processes": ["mysql", "mysqld", "postgresql", "postgres", "mariadb"], "ports": [3306, 5432], "description": "Database"},
+        "samba": {"processes": ["smbd", "nmbd"], "ports": [139, 445], "description": "File Sharing"},
+        "transmission": {"processes": ["transmission-daemon", "transmission"], "ports": [9091], "description": "Torrent Client"},
+        "pihole": {"processes": ["pihole", "dnsmasq", "lighttpd"], "ports": [53, 80], "description": "DNS Filter"},
+        "homeassistant": {"processes": ["homeassistant", "hass"], "ports": [8123], "description": "Home Automation"},
+        "mqtt": {"processes": ["mosquitto", "mqtt"], "ports": [1883, 8883], "description": "IoT Messaging"},
+        "vnc": {"processes": ["vncserver", "vnc", "x11vnc"], "ports": [5900, 5901], "description": "Remote Desktop"},
+        "magi": {"processes": ["magi-node", "python3"], "ports": [8080, 8081, 8082], "description": "MAGI Monitor"}
     }
-    
+
     try:
-        # Obtener procesos en ejecución
         running_processes = []
         for p in psutil.process_iter(['name', 'cmdline']):
             try:
-                name = p.info['name'].lower()
-                cmdline = ' '.join(p.info['cmdline'] or []).lower()
+                name = (p.info.get('name') or '').lower()
+                cmdline = ' '.join(p.info.get('cmdline') or []).lower()
                 running_processes.append((name, cmdline))
-            except:
+            except Exception:
                 continue
-        
-        # Obtener puertos abiertos
+
         open_ports = set()
         for conn in psutil.net_connections(kind='inet'):
             if conn.laddr and conn.status == 'LISTEN':
-                open_ports.add(conn.laddr.port)
-        
-        # Detectar servicios
+                try:
+                    open_ports.add(conn.laddr.port)
+                except Exception:
+                    continue
+
         for service_name, service_def in service_definitions.items():
-            # Verificar procesos
             process_found = False
             for proc_name, cmdline in running_processes:
-                if any(proc in proc_name or proc in cmdline for proc in service_def["processes"]):
+                if any(proc in proc_name or proc in cmdline for proc in service_def['processes']):
                     process_found = True
                     break
-            
-            # Verificar puertos
-            port_found = any(port in open_ports for port in service_def["ports"])
-            active_ports = [port for port in service_def["ports"] if port in open_ports]
-            
+
+            port_found = any(port in open_ports for port in service_def['ports'])
+            active_ports = [port for port in service_def['ports'] if port in open_ports]
+
             if process_found or port_found:
                 services[service_name] = {
-                    "status": "running" if process_found else "port_open",
-                    "ports": active_ports if active_ports else service_def["ports"][:1],
-                    "description": service_def["description"],
-                    "process_detected": process_found,
-                    "port_detected": port_found
+                    'status': 'running' if process_found else 'port_open',
+                    'ports': active_ports if active_ports else service_def['ports'][:1],
+                    'description': service_def['description'],
+                    'process_detected': process_found,
+                    'port_detected': port_found
                 }
-        
-        # Detectar servicios adicionales por puertos comunes
-        additional_ports = {
-            21: "FTP", 25: "SMTP", 53: "DNS", 110: "POP3", 143: "IMAP",
-            993: "IMAPS", 995: "POP3S", 3389: "RDP", 5432: "PostgreSQL",
-            6379: "Redis", 27017: "MongoDB", 9200: "Elasticsearch"
-        }
-        
-        for port, service_name in additional_ports.items():
-            if port in open_ports and service_name.lower() not in services:
-                services[service_name.lower()] = {
-                    "status": "port_open",
-                    "ports": [port],
-                    "description": service_name,
-                    "process_detected": False,
-                    "port_detected": True
+
+        additional_ports = {21: 'FTP', 25: 'SMTP', 53: 'DNS', 110: 'POP3', 143: 'IMAP', 993: 'IMAPS', 995: 'POP3S', 3389: 'RDP', 5432: 'PostgreSQL', 6379: 'Redis', 27017: 'MongoDB', 9200: 'Elasticsearch'}
+        for port, svc in additional_ports.items():
+            if port in open_ports and svc.lower() not in services:
+                services[svc.lower()] = {
+                    'status': 'port_open',
+                    'ports': [port],
+                    'description': svc,
+                    'process_detected': False,
+                    'port_detected': True
                 }
-    
     except Exception as e:
         print(f"Error detecting services: {e}")
-    
+
     return services
+
 
 def get_service_port(service_name):
     """Get default port for common services"""
     default_ports = {
-        "nextcloud": 80,
-        "jellyfin": 8096,
-        "plex": 32400,
-        "ssh": 22,
-        "web": 80,
-        "samba": 445
+        'nextcloud': 80,
+        'jellyfin': 8096,
+        'plex': 32400,
+        'ssh': 22,
+        'web': 80,
+        'samba': 445
     }
     return default_ports.get(service_name)
+
 
 def get_system_metrics_fallback():
     """Fallback system metrics without psutil"""
     return {
-        "cpu": 42,
-        "memory": {"percentage": 35, "used_gb": 2.8, "total_gb": 8.0},
-        "disk": {"percentage": 60, "used_gb": 120, "total_gb": 200},
-        "network": {"mb_sent": 45.2, "mb_recv": 234.5},
-        "temperature": {"cpu": {"current": 45}},
-        "power_state": "normal",
-        "services": {},
-        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "node_status": "online"
+        'cpu': 42,
+        'memory': {'percentage': 35, 'used_gb': 2.8, 'total_gb': 8.0},
+        'disk': {'percentage': 60, 'used_gb': 120, 'total_gb': 200},
+        'network': {'mb_sent': 45.2, 'mb_recv': 234.5},
+        'temperature': {'cpu': {'current': 45}},
+        'power_state': 'normal',
+        'services': {},
+        'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+        'node_status': 'online'
     }
+
+
+def gather_all_metrics():
+    """Collect metrics for local node and attempt to retrieve from other configured nodes."""
+    all_metrics = {}
+
+    # Local metrics
+    try:
+        local_metrics = get_system_metrics()
+        all_metrics[CONFIG['node_name']] = {
+            'status': 'online',
+            'metrics': local_metrics,
+            'ip': 'localhost',
+            'port': CONFIG['port']
+        }
+    except Exception:
+        all_metrics[CONFIG['node_name']] = {
+            'status': 'online',
+            'metrics': get_system_metrics_fallback(),
+            'ip': 'localhost',
+            'port': CONFIG['port']
+        }
+
+    demo_mode = os.environ.get('MAGI_DEMO_MODE', 'false').lower() == 'true'
+    if demo_mode:
+        # Simulate other nodes
+        for i, node_name in enumerate(['GASPAR', 'MELCHIOR', 'BALTASAR']):
+            if node_name == CONFIG['node_name']:
+                continue
+            sim_metrics = MAGIHandler.create_simulated_metrics(None, node_name)
+            all_metrics[node_name] = {
+                'status': 'online',
+                'metrics': sim_metrics,
+                'ip': f'192.168.1.{100 + i}',
+                'port': 8080 + i
+            }
+        return all_metrics
+
+    # Real discovery
+    nodes = discover_nodes()
+    for node in nodes:
+        name = node.get('name')
+        if name == CONFIG['node_name']:
+            continue
+
+        if node.get('status') not in ('online', 'power_save'):
+            all_metrics[name] = {
+                'status': node.get('status'),
+                'error': 'node unreachable',
+                'ip': node.get('ip'),
+                'port': node.get('port', 'unknown')
+            }
+            continue
+
+        node_ip = node.get('ip')
+        node_port = node.get('port', 8080)
+
+        try:
+            url = f'http://{node_ip}:{node_port}/api/metrics'
+            req = urllib.request.Request(url, headers={'User-Agent': 'MAGI-Discovery'})
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                if resp.status == 200:
+                    metrics = json.loads(resp.read().decode())
+                    all_metrics[name] = {
+                        'status': 'online',
+                        'metrics': metrics,
+                        'ip': node_ip,
+                        'port': node_port
+                    }
+                else:
+                    all_metrics[name] = {
+                        'status': 'error',
+                        'error': f'HTTP {resp.status}',
+                        'ip': node_ip,
+                        'port': node_port
+                    }
+        except Exception as e:
+            all_metrics[name] = {
+                'status': 'offline',
+                'error': str(e),
+                'ip': node_ip,
+                'port': node_port
+            }
+
+    return all_metrics
+
 
 def discover_nodes():
     """Discover other MAGI nodes on the network with power state detection and services"""
     nodes = []
-    current_node = CONFIG["node_name"]
-    current_port = CONFIG["port"]
-    
-    for node_config in CONFIG["other_nodes"]:
-        node_name = node_config["name"]
-        node_ip = node_config["ip"]
-        node_port = node_config["port"]
-        
-        # Skip self
+    current_node = CONFIG.get('node_name')
+    current_port = CONFIG.get('port')
+
+    for node_config in CONFIG.get('other_nodes', []):
+        node_name = node_config.get('name')
+        node_ip = node_config.get('ip')
+        node_port = node_config.get('port')
+
+        # Self case
         if node_name == current_node:
             try:
                 metrics = get_system_metrics()
-                power_state = metrics.get("power_state", "normal")
-                node_status = "power_save" if power_state in ["power_save", "low_power"] else "online"
-                services = metrics.get("services", {})
-            except:
-                node_status = "online"
-                power_state = "normal"
+                power_state = metrics.get('power_state', 'normal')
+                node_status = 'power_save' if power_state in ('power_save', 'low_power') else 'online'
+                services = metrics.get('services', {})
+            except Exception:
+                node_status = 'online'
+                power_state = 'normal'
                 services = {}
-                
+
             nodes.append({
-                "name": node_name,
-                "ip": "localhost",
-                "port": current_port,
-                "status": node_status,
-                "response_time": 0,
-                "self": True,
-                "last_seen": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "power_state": power_state,
-                "services": services
+                'name': node_name,
+                'ip': 'localhost',
+                'port': current_port,
+                'status': node_status,
+                'response_time': 0,
+                'self': True,
+                'last_seen': time.strftime('%Y-%m-%d %H:%M:%S'),
+                'power_state': power_state,
+                'services': services
             })
             continue
-        
-        # Test connection to other nodes
+
+        # Test remote connectivity and try to fetch /api/metrics
         try:
             start_time = time.time()
-            
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(2)
             result = sock.connect_ex((node_ip, node_port))
             sock.close()
-            
             response_time = int((time.time() - start_time) * 1000)
-            
+
             if result == 0:
-                node_status = "online"
-                power_state = "normal"
+                node_status = 'online'
+                power_state = 'normal'
                 services = {}
-                
                 try:
-                    # Obtener métricas del nodo remoto
-                    url = f"http://{node_ip}:{node_port}/api/metrics"
+                    url = f'http://{node_ip}:{node_port}/api/metrics'
                     req = urllib.request.Request(url, headers={'User-Agent': 'MAGI-Discovery'})
                     with urllib.request.urlopen(req, timeout=2) as response:
                         if response.status == 200:
                             metrics_data = json.loads(response.read().decode())
-                            power_state = metrics_data.get("power_state", "normal")
-                            services = metrics_data.get("services", {})
-                            if power_state in ["power_save", "low_power"]:
-                                node_status = "power_save"
+                            power_state = metrics_data.get('power_state', 'normal')
+                            services = metrics_data.get('services', {})
+                            if power_state in ('power_save', 'low_power'):
+                                node_status = 'power_save'
                 except Exception as e:
-                    print(f"Error getting remote metrics from {node_name}: {e}")
-                    
+                    print(f'Error getting remote metrics from {node_name}: {e}')
+
                 nodes.append({
-                    "name": node_name,
-                    "ip": node_ip,
-                    "port": node_port,
-                    "status": node_status,
-                    "response_time": response_time,
-                    "self": False,
-                    "last_seen": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "power_state": power_state,
-                    "services": services
+                    'name': node_name,
+                    'ip': node_ip,
+                    'port': node_port,
+                    'status': node_status,
+                    'response_time': response_time,
+                    'self': False,
+                    'last_seen': time.strftime('%Y-%m-%d %H:%M:%S'),
+                    'power_state': power_state,
+                    'services': services
                 })
             else:
                 nodes.append({
-                    "name": node_name,
-                    "ip": node_ip,
-                    "port": node_port,
-                    "status": "offline",
-                    "response_time": -1,
-                    "self": False,
-                    "last_seen": "never",
-                    "power_state": "offline",
-                    "services": {}
+                    'name': node_name,
+                    'ip': node_ip,
+                    'port': node_port,
+                    'status': 'offline',
+                    'response_time': -1,
+                    'self': False,
+                    'last_seen': 'never',
+                    'power_state': 'offline',
+                    'services': {}
                 })
-                
         except Exception as e:
             nodes.append({
-                "name": node_name,
-                "ip": node_ip,
-                "port": node_port,
-                "status": "error",
-                "response_time": -1,
-                "self": False,
-                "last_seen": "never",
-                "power_state": "error",
-                "services": {}
+                'name': node_name,
+                'ip': node_ip,
+                'port': node_port,
+                'status': 'error',
+                'response_time': -1,
+                'self': False,
+                'last_seen': 'never',
+                'power_state': 'error',
+                'services': {}
             })
-    
+
     return nodes
 
+
+def ensure_api_key():
+    """Abort startup if API key enforcement is enabled but api_key is default/empty."""
+    if CONFIG.get('require_api_key'):
+        key = CONFIG.get('api_key')
+        if not key or key == 'changeme':
+            raise RuntimeError('API key enforcement is enabled but MAGI API key is not set or still default (changeme). Set MAGI_API_KEY env or CONFIG["api_key"]')
+
+
 def setup_node():
-    """Setup node configuration"""
+    """Setup node configuration and apply environment overrides."""
     import sys
-    
+
+
+
     if len(sys.argv) > 1:
         node_name = sys.argv[1].upper()
-        if node_name in ["GASPAR", "MELCHIOR", "BALTASAR"]:
-            CONFIG["node_name"] = node_name
+        if node_name in ("GASPAR", "MELCHIOR", "BALTASAR"):
+            CONFIG['node_name'] = node_name
             print(f"⚡ MAGI Node '{node_name}' configured")
+
+    if CONFIG.get('node_name') == 'UNKNOWN':
+        CONFIG['node_name'] = input('Enter node name (GASPAR/MELCHIOR/BALTASAR): ').upper()
+
+    # Environment overrides (wrappers/systemd)
+    try:
+        env_port = os.environ.get('MAGI_PORT')
+        if env_port:
+            CONFIG['port'] = int(env_port)
+    except Exception:
+        pass
+
+    env_bind = os.environ.get('MAGI_BIND')
+    if env_bind:
+        CONFIG['bind_address'] = env_bind
+
+    env_require = os.environ.get('MAGI_REQUIRE_API_KEY')
+    if env_require is not None:
+        CONFIG['require_api_key'] = str(env_require).lower() in ('1', 'true', 'yes')
+
+    env_key = os.environ.get('MAGI_API_KEY')
+    if env_key:
+        CONFIG['api_key'] = env_key
+
+    # Login configuration
+    env_require_login = os.environ.get('MAGI_REQUIRE_LOGIN')
+    if env_require_login is not None:
+        CONFIG['require_login'] = str(env_require_login).lower() in ('1', 'true', 'yes')
     
-    if CONFIG["node_name"] == "UNKNOWN":
-        CONFIG["node_name"] = input("Enter node name (GASPAR/MELCHIOR/BALTASAR): ").upper()
+    env_admin_pass = os.environ.get('MAGI_ADMIN_PASSWORD')
+    if env_admin_pass:
+        CONFIG['login_users']['admin'] = env_admin_pass
+    
+    # Check if admin password is still default
+    if CONFIG.get('require_login') and CONFIG['login_users']['admin'] == 'changeme':
+        print("⚠️  WARNING: Admin password is still default. Set MAGI_ADMIN_PASSWORD environment variable.")
+
+    if any([os.environ.get('MAGI_PORT'), os.environ.get('MAGI_BIND'), os.environ.get('MAGI_REQUIRE_API_KEY'), os.environ.get('MAGI_API_KEY'), os.environ.get('MAGI_REQUIRE_LOGIN'), os.environ.get('MAGI_ADMIN_PASSWORD')]):
+        print('Applied environment configuration overrides:')
+        print(f"  bind_address={CONFIG.get('bind_address')} port={CONFIG.get('port')} require_api_key={CONFIG.get('require_api_key')} require_login={CONFIG.get('require_login')}")
+
 
 def main():
     """Main MAGI function"""
-    print("⚡ MAGI v2.0 - Enhanced Distributed Monitoring")
-    print("=" * 50)
-    
+    print('⚡ MAGI v2.0 - Enhanced Distributed Monitoring')
+    print('=' * 50)
+
     setup_node()
-    
+
     print(f"Node: {CONFIG['node_name']}")
     print(f"Port: {CONFIG['port']}")
+    print(f"Bind: {CONFIG.get('bind_address')}")
     print(f"Platform: {platform.platform()}")
     print(f"Python: {platform.python_version()}")
-    print("=" * 50)
-    
+    print('=' * 50)
+
+    # Safety check for API key
     try:
-        with socketserver.TCPServer(("", CONFIG["port"]), MAGIHandler) as httpd:
-            print(f"🚀 MAGI {CONFIG['node_name']} server started")
-            print(f"📡 Access dashboard: http://localhost:{CONFIG['port']}")
-            print(f"🌐 Network access: http://[your-ip]:{CONFIG['port']}")
-            print("Press Ctrl+C to stop")
-            print("=" * 50)
+        ensure_api_key()
+    except Exception as e:
+        print(f'❌ Startup aborted: {e}')
+        return
+    
+    # Start session cleanup if login is required
+    if CONFIG.get('require_login'):
+        start_session_cleanup()
+        print('🔐 Session management started')
+
+    try:
+        with socketserver.ThreadingTCPServer((CONFIG.get('bind_address', ''), CONFIG['port']), MAGIHandler) as httpd:
+            bind = CONFIG.get('bind_address') or '0.0.0.0'
+            print(f"🚀 MAGI {CONFIG['node_name']} server started (threaded)")
+            print(f"📡 Access dashboard: http://{bind}:{CONFIG['port']}")
+            if CONFIG.get('require_api_key'):
+                print('🔒 API key enforcement enabled. Use Authorization: Bearer <API_KEY>')
+            print('Press Ctrl+C to stop')
+            print('=' * 50)
             httpd.serve_forever()
     except KeyboardInterrupt:
         print(f"\n🛑 MAGI {CONFIG['node_name']} server stopped")
     except Exception as e:
         print(f"❌ Error starting MAGI server: {e}")
+
 
 if __name__ == "__main__":
     main()
